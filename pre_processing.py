@@ -1,11 +1,9 @@
 import pandas as pd
 import numpy as np
 import re
-import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from itertools import product
-import recordlinkage as rl
 
 
 # nltk.download('stopwords')
@@ -29,8 +27,8 @@ name_stopwords = all_stopwords + ['co', 'corp', 'inc', 'company', 'limited', 'll
 lda = pd.read_csv('Priority Customers.csv', delimiter=';')
 hw = pd.read_csv('HeroWeb Accounts.csv', delimiter=';')
 
-lda = lda[:200]
-hw = hw[:200]
+# lda = lda[:500]
+# hw = hw[:500]
 
 lda.columns = [c.lower() for c in list(lda.columns)]  # change to lower case
 hw.columns = [c.lower() for c in list(hw.columns)]  # change to lower case
