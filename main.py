@@ -1,17 +1,12 @@
-from pre_processing import hw, lda, hw_raw, lda_raw
+from pre_processing import hw, lda
 import pandas as pd
-import numpy as np
 import recordlinkage as rl
 import textdistance as td
 from progressbar import progressbar
+import warnings
+import multiprocessing as mp
+import numpy as np
 
-
-lda.info()
-hw.info()
-
-indexer = rl.Index()
-indexer.full()
-possible_links = indexer.index(hw, lda)
 
 hw_to_lda = {
     'email': ['email'],
@@ -69,6 +64,9 @@ def compare_records(rec1, rec2):
             elif type(rec1[col]) == str and type(rec2[col2]) == str:
                 temp_scores.append(compare_method['string'](rec1[col], rec2[col2]))
 
+            else:
+                warnings.warn(f'wrong types: {rec1[col]} = {type(rec1[col])} | {rec2[col2]} = {type(rec2[col2])}')
+
         scores[col] = float(max(temp_scores))
 
     for k, v in property_merge.items():
@@ -80,13 +78,39 @@ def compare_records(rec1, rec2):
     return scores
 
 
-scores = pd.DataFrame(index=possible_links, columns=list(compare_records(hw.loc[1], lda.loc[1]).keys()))
-for pair in progressbar(possible_links):
-    scores.loc[pair] = compare_records(hw.loc[pair[0]], lda.loc[pair[1]])
+def worker(df1, df2, links, return_dict, proc):
+    scores = pd.DataFrame(index=possible_links, columns=list(compare_records(hw.loc[1], lda.loc[1]).keys()))
+    for pair in progressbar(possible_links):
+        scores.loc[pair] = compare_records(hw.loc[pair[0]], lda.loc[pair[1]])
 
-scores['total'] = scores.sum(axis=1)
+    scores['total'] = scores.sum(axis=1)
 
-scores = scores.astype(float)
-description = scores.describe()
+    scores = scores.astype(float)
 
+
+if __name__ == "__main__":
+
+    # lda.info()
+    # hw.info()
+
+    indexer = rl.Index()
+    indexer.full()
+    possible_links = indexer.index(hw, lda)
+
+    manager = mp.Manager()
+    return_dict = manager.dict()
+    proc_num = 5
+    link_splits = np.array_split(possible_links, proc_num)
+
+    jobs = []
+    for i in range(proc_num):
+        p = mp.Process(target=worker, args=(hw, lda, link_splits[i], return_dict, i))
+        jobs.append(p)
+        p.start()
+
+    for proc in jobs:
+        proc.join()
+    print(return_dict.values())
+
+#     description = scores.describe()
 

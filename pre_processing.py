@@ -5,6 +5,8 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from itertools import product
+import recordlinkage as rl
+
 
 # nltk.download('stopwords')
 # nltk.download('punkt')
@@ -27,8 +29,8 @@ name_stopwords = all_stopwords + ['co', 'corp', 'inc', 'company', 'limited', 'll
 lda = pd.read_csv('Priority Customers.csv', delimiter=';')
 hw = pd.read_csv('HeroWeb Accounts.csv', delimiter=';')
 
-lda = lda[:100]
-hw = hw[:100]
+lda = lda[:200]
+hw = hw[:200]
 
 lda.columns = [c.lower() for c in list(lda.columns)]  # change to lower case
 hw.columns = [c.lower() for c in list(hw.columns)]  # change to lower case
@@ -82,20 +84,21 @@ lda_des = lda.describe()
 hw_des = hw.describe()
 
 
-def normalize_name(a: str) -> list[str]:
+def normalize_name(a: str):
     a = a.lower()  # convert to lower case
     a = re.sub(r'[^a-z0-9 ]', '', a)  # keep numbers and letters and space
     tokens = word_tokenize(a)  # separate words
-    tokens = [word for word in tokens if word not in all_stopwords]  # remove stopwords
-    return tokens
+    res = ' '.join(tokens)
+    return res
 
 
-def normalize_address(a: str) -> list[str]:
+def normalize_address(a: str):
     a = a.lower()  # convert to lower case
     a = re.sub(r'[^a-z0-9 ]', '', a)  # keep numbers and letters and space
     tokens = word_tokenize(a)  # separate words
     tokens = [word for word in tokens if word not in address_stopwords]  # remove stopwords
-    return tokens
+    res = ' '.join(tokens)
+    return res
 
 
 def normalize_number(a) -> str:
@@ -124,7 +127,8 @@ def merge_columns(df, col1, col2, drop=True):
             df.loc[i, col1].extend(df.loc[i, col2])
             temp_df.loc[i, col1] = df.loc[i, col1]
         elif type(df.loc[i, col1]) == str and type(df.loc[i, col2]) == str:
-            temp_df.loc[i, col1] = [df.loc[i, col1], df.loc[i, col2]]
+            # temp_df.loc[i, col1] = [df.loc[i, col1], df.loc[i, col2]]
+            temp_df.loc[i, col1] = df.loc[i, col1] + ' ' + df.loc[i, col2]
         elif type(df.loc[i, col1]) == str and type(df.loc[i, col2]) == list:
             df.loc[i, col2].append(df.loc[i, col1])
             temp_df.loc[i, col1] = df.loc[i, col2]
@@ -239,3 +243,4 @@ lda.replace([], np.nan, inplace=True)
 #hw.reindex(columns=['id', 'email', 'company_name', 'name1', 'name2', 'group', 'phone', 'phone2', 'phone3',
 #                    'address1', 'city', 'state', 'zip', 'country', 'address2',
 #                    'city2', 'state2', 'zip2', 'country2'])
+
