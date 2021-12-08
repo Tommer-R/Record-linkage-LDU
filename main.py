@@ -13,6 +13,75 @@ lda_raw = pd.read_csv('data/raw/Priority Customers.csv', delimiter=';')
 scores = pd.read_pickle('data/generated/scores.pkl')
 
 
+def evaluate_matches(df, plot=True):
+    verified = []
+    verified_false = []
+    non_verified = []
+    for i in df.index:
+        match = df.loc[i]
+        hw_index = match['index1']
+        lda_index = match['index2']
+        if pd.notnull(lda_raw.loc[lda_index, 'HW Account']):
+            if lda_raw.loc[lda_index, 'HW Account'] == hw_raw.loc[hw_index, 'account_id']:
+                verified.append(i)
+            else:
+                verified_false.append(i)
+        else:
+            non_verified.append(i)
+
+    num_true_matches = len(lda_raw.loc[pd.notnull(lda_raw['HW Account'])])
+    percent_verified = round(len(verified) / len(df) * 100, 2)
+    percent_false = round(len(verified_false) / len(df) * 100, 2)
+    percent_non_verified = 100 - percent_false - percent_verified
+
+    print('====================== REPORT ======================')
+    print(f'total matches: {len(df)}')
+    print(f'total true matches: {num_true_matches}')
+    print(f'verified matches: {len(verified)}')
+    print(f'verified false matches: {len(verified_false)}')
+    print(f'non verified matches: {len(non_verified)}')
+    print(f'of total true matches found: {round(len(verified) / num_true_matches * 100, 2)}%')
+    print(f'verified share: {percent_verified}%')
+    print(f'false share: {percent_false}%')
+
+    if plot:
+        face_color = '#EAEAEA'
+        color_bars = '#3475D0'
+        txt_color1 = '#252525'
+        txt_color2 = '#004C74'
+
+        # Pie chart, where the slices will be ordered and plotted counter-clockwise:
+        labels = 'verified', 'non-verified', 'false'
+        sizes = [percent_verified, percent_non_verified, percent_false]
+        explode = (0, 0, 0)  # only "explode" one slice
+
+        fig1, ax1 = plt.subplots(1, figsize=(10, 6), facecolor=face_color)
+        ax1.pie(sizes, explode=explode, labels=labels, autopct='%1.2f%%',
+                shadow=True, startangle=90)
+        ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+
+        text_str = '\n'.join((
+            f'total matches: {len(df)}',
+            f'total true matches: {num_true_matches}',
+            f'verified matches: {len(verified)}',
+            f'verified false matches: {len(verified_false)}',
+            f'non verified matches: {len(non_verified)}'))
+
+        # these are matplotlib.patch.Patch properties
+        props = dict(boxstyle='round', alpha=0.5)
+
+        # place a text box in upper left in axes coordinates
+        ax1.text(0, 1, text_str, transform=ax1.transAxes, fontsize=14,
+                 verticalalignment='top', horizontalalignment='center', bbox=props)
+
+        plt.title('Matches evaluation')
+        plt.savefig(f'plots/Evaluation.png', facecolor=face_color)
+        plt.show()
+        plt.clf()
+
+    return verified, verified_false, non_verified
+
+
 def validate_strings(df):
     for col in df.columns:
         df[col] = df[col].apply(lambda x: str(x) if pd.notnull(x) else x)
@@ -172,33 +241,4 @@ def match_filter(min_score, full_match_at=1, all_match: list[str] = None, some_m
 
 matches = scores[match_filter(5)]
 
-
-def evaluate_matches(df):
-    verified = []
-    verified_false = []
-    non_verified = []
-    for i in df.index:
-        match = df.loc[i]
-        hw_index = match['index1']
-        lda_index = match['index2']
-        if pd.notnull(lda_raw.loc[lda_index, 'HW Account']):
-            if lda_raw.loc[lda_index, 'HW Account'] == hw_raw.loc[hw_index, 'account_id']:
-                verified.append(i)
-            else:
-                verified_false.append(i)
-        else:
-            non_verified.append(i)
-
-    num_true_matches = len(lda_raw.loc[pd.notnull(lda_raw['HW Account'])])
-    print('====================== REPORT ======================')
-    print(f'total matches: {len(df)}')
-    print(f'total true matches: {num_true_matches}')
-    print(f'verified matches: {len(verified)}')
-    print(f'verified false matches: {len(verified_false)}')
-    print(f'non verified matches: {len(non_verified)}')
-    print(f'of total true matches found: {round(len(verified)/num_true_matches*100, 2)}%')
-    print(f'verified share: {round(len(verified)/len(df)*100, 2)}%')
-    print(f'false share: {round(len(verified_false) / len(df) * 100, 2)}%')
-
-
-
+evaluate_matches(matches)
