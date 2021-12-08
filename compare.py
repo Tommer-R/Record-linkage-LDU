@@ -20,6 +20,8 @@ def validate_strings(df):
 hw = validate_strings(hw)
 lda = validate_strings(lda)
 
+hw = hw.loc[:]
+lda = lda.loc[:]
 """
 def compare_records(rec1, rec2):
     scores_ = {}
@@ -86,8 +88,14 @@ property_merge = {
 }
 
 compare_method = {
-    'tokens': td.jaccard,
-    'string': td.levenshtein.normalized_similarity
+    'email': td.ratcliff_obershelp,
+    'name': td.ratcliff_obershelp,
+    'address': td.ratcliff_obershelp,
+    'city': td.levenshtein.normalized_similarity,
+    'state': td.levenshtein.normalized_similarity,
+    'zip': td.levenshtein.normalized_similarity,
+    'country': td.levenshtein.normalized_similarity,
+    'phone': td.levenshtein.normalized_similarity
 }
 
 
@@ -102,11 +110,15 @@ def compare_records(rec1, rec2):
             if type(rec1[col]) == float and not pd.notnull(rec1[col]) or \
                     type(rec2[col2]) == float and not pd.notnull(rec2[col2]):
                 temp_scores.append(0)
-            elif type(rec1[col]) == list and type(rec2[col2]) == list:
-                temp_scores.append(compare_method['tokens'](rec1[col], rec2[col2]))
 
-            elif type(rec1[col]) == str and type(rec2[col2]) == str:
-                temp_scores.append(compare_method['string'](rec1[col], rec2[col2]))
+            elif True in [key in col for key in compare_method.keys()]:
+                for key in compare_method.keys():
+                    if key in col:
+                        temp_scores.append(compare_method[key](rec1[col], rec2[col2]))
+                        continue
+
+            else:
+                temp_scores.append(-1)
 
         res[col] = float(max(temp_scores))
 
@@ -164,7 +176,7 @@ if __name__ == "__main__":
 
     manager = mp.Manager()
     return_dict = manager.dict()
-    proc_num = 6
+    proc_num = mp.cpu_count()-2
     link_splits = np.array_split(possible_links, proc_num)
 
     jobs = []
@@ -178,6 +190,5 @@ if __name__ == "__main__":
 
     frames = [return_dict[i] for i in range(proc_num)]
     scores = pd.concat(frames, ignore_index=True)
-    scores.to_csv('data/generated/scores.csv', index=False)
-
+    scores.to_pickle('data/generated/scores.pkl')
 #     description = scores.describe()

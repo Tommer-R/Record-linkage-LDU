@@ -104,12 +104,13 @@ def normalize_number(a) -> str:
     return a
 
 
-def normalize_email(a) -> list[str]:
+def normalize_email(a):
     a = a.lower()  # convert to lower case
     a = re.sub(r'[^a-z0-9 ]', ' ', a)  # keep numbers and letters and space
     tokens = word_tokenize(a)  # separate words
     tokens = [word for word in tokens if word not in all_stopwords]  # remove stopwords
-    return tokens
+    res = ' '.join(tokens)
+    return res
 
 
 def remove_www(a):
@@ -197,9 +198,8 @@ for col, i in product(list(hw.columns), hw.index):
 # hw = merge_columns(hw, 'saddress1', 'saddress2')
 hw = merge_columns(hw, 'first_name', 'last_name')
 
-hw.columns = ['name1' if x == 'first_name' else x for x in hw.columns]
-hw.columns = ['address3' if x == 'saddress1' else x for x in hw.columns]
-hw.columns = ['address4' if x == 'saddress2' else x for x in hw.columns]
+
+hw.rename({'first_name': 'name1', 'saddress1': 'address3', 'saddress2': 'address4'}, axis=1, inplace=True)
 
 # remove duplicate values within a record
 for i in hw.index:
@@ -233,13 +233,14 @@ for i in hw.index:
 lda = merge_columns(lda, 'address1', 'address2')
 lda = merge_columns(lda, 'address1', 'address3')
 
-lda.columns = ['address' if x == 'address1' else x for x in lda.columns]
+lda = lda.rename({'address1': 'address'}, axis=1)
+
 
 hw.replace([], np.nan, inplace=True)
 lda.replace([], np.nan, inplace=True)
 
-hw.to_csv('data/processed/hw_processed.csv', index=False)
-lda.to_csv('data/processed/lda_processed.csv', index=False)
+hw.to_pickle('data/processed/hw_processed.pkl')
+lda.to_pickle('data/processed/lda_processed.pkl')
 
 #hw.reindex(columns=['id', 'email', 'company_name', 'name1', 'name2', 'group', 'phone', 'phone2', 'phone3',
 #                    'address1', 'city', 'state', 'zip', 'country', 'address2',

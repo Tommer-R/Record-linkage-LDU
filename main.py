@@ -6,8 +6,9 @@ from datetime import datetime, timedelta
 from matplotlib import pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
 
-hw = pd.read_csv('data/processed/hw_processed.csv')
-lda = pd.read_csv('data/processed/lda_processed.csv')
+hw = pd.read_pickle('data/processed/hw_processed.pkl')
+lda = pd.read_pickle('data/processed/lda_processed.pkl')
+scores = pd.read_pickle('data/generated/scores.pkl')
 
 
 def validate_strings(df):
@@ -17,9 +18,9 @@ def validate_strings(df):
     return df
 
 
-hw1 = validate_strings(hw)
+hw = validate_strings(hw)
+lda = validate_strings(lda)
 
-scores = pd.read_csv('scores.csv')
 
 thresholds = {'email': 0,
               'company_name': 0,
@@ -72,7 +73,7 @@ def calc_scores(df, column_name='score'):
     return df
 
 
-calc_eta(scores)
+# calc_eta(scores)
 # scores = calc_scores(scores)
 
 
@@ -136,3 +137,6 @@ for col in scores.columns:
     if col not in {'total', 'score', 'index1', 'index2'}:
         # plot_distribution(scores[col], col)
         pass
+
+
+# scores.to_pickle('data/generated/scores.pkl')
