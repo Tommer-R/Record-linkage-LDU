@@ -1,4 +1,3 @@
-from pre_processing import hw, lda
 import pandas as pd
 import recordlinkage as rl
 import textdistance as td
@@ -6,6 +5,20 @@ from time import time
 import multiprocessing as mp
 import numpy as np
 from datetime import timedelta
+
+hw = pd.read_csv('data/processed/hw_processed.csv')
+lda = pd.read_csv('data/processed/lda_processed.csv')
+
+
+def validate_strings(df):
+    for col in df.columns:
+        df[col] = df[col].apply(lambda x: str(x) if pd.notnull(x) else x)
+        df[col] = df[col].apply(lambda x: x.removesuffix('.0') if pd.notnull(x) and x.endswith('.0') else x)
+    return df
+
+
+hw = validate_strings(hw)
+lda = validate_strings(lda)
 
 """
 def compare_records(rec1, rec2):
@@ -110,7 +123,7 @@ def worker(df1, df2, links, res_dict, n_proc):
     print(f'started process num {n_proc} with length {len(links)}')
     s_time = time()
 
-    show_percents = set([n/10 for n in range(1, 1010)])
+    show_percents = set([n / 10 for n in range(1, 1010)])
 
     index = list(range(len(links)))
     columns = ['index1', 'index2'] + list(compare_records(df1.loc[0], df2.loc[0]).keys())
@@ -133,7 +146,7 @@ def worker(df1, df2, links, res_dict, n_proc):
             if percent_done in show_percents:
                 delta = int(time() - s_time)
                 run_time = str(timedelta(seconds=delta))
-                seconds = int(delta/percent_done * (100 - percent_done))
+                seconds = int(delta / percent_done * (100 - percent_done))
                 eta = str(timedelta(seconds=seconds))
                 print(f'finished: {round(percent_done, 1)}% | run time: {run_time} | ETA: {eta}')
 
@@ -144,9 +157,6 @@ def worker(df1, df2, links, res_dict, n_proc):
 
 
 if __name__ == "__main__":
-
-    # lda.info()
-    # hw.info()
 
     indexer = rl.Index()
     indexer.full()
@@ -165,10 +175,9 @@ if __name__ == "__main__":
 
     for proc in jobs:
         proc.join()
-    # print(return_dict.values())
 
     frames = [return_dict[i] for i in range(proc_num)]
     scores = pd.concat(frames, ignore_index=True)
-    scores.to_csv('scores.csv', index=False)
+    scores.to_csv('data/generated/scores.csv', index=False)
 
 #     description = scores.describe()

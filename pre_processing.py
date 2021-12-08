@@ -24,15 +24,15 @@ for s in state_codes:
 address_stopwords = all_stopwords + ["street", "st", "place", "rd", "road", 'square']
 name_stopwords = all_stopwords + ['co', 'corp', 'inc', 'company', 'limited', 'llc']
 
-lda = pd.read_csv('Priority Customers.csv', delimiter=';')
-hw = pd.read_csv('HeroWeb Accounts.csv', delimiter=';')
+lda = pd.read_csv('data/raw/Priority Customers.csv', delimiter=';')
+hw = pd.read_csv('data/raw/HeroWeb Accounts.csv', delimiter=';')
 
 # lda = lda[:500]
 # hw = hw[:500]
 
 lda.columns = [c.lower() for c in list(lda.columns)]  # change to lower case
 hw.columns = [c.lower() for c in list(hw.columns)]  # change to lower case
-hw.columns = [c.replace('account_', '') for c in list(hw.columns)]  # simplify column names
+hw.columns = [c.replace('account_', '') for c in list(hw.columns)]  # simplify x names
 hw_columns_to_drop = ['active', 'date_joined', 'date_expires', 'referred_by', 'locked', 'terms', 'sales_rep',
                       'is_sales_rep', 'tax_id', 'tax_exempt', 'long', 'lat', 'date_last_ordered', 'total_orders',
                       'total_revenue', 'notes', 'store_optin']
@@ -237,6 +237,9 @@ lda.columns = ['address' if x == 'address1' else x for x in lda.columns]
 
 hw.replace([], np.nan, inplace=True)
 lda.replace([], np.nan, inplace=True)
+
+hw.to_csv('data/processed/hw_processed.csv', index=False)
+lda.to_csv('data/processed/lda_processed.csv', index=False)
 
 #hw.reindex(columns=['id', 'email', 'company_name', 'name1', 'name2', 'group', 'phone', 'phone2', 'phone3',
 #                    'address1', 'city', 'state', 'zip', 'country', 'address2',
