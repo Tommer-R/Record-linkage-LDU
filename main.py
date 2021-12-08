@@ -47,36 +47,6 @@ multipliers = {'email': 1,
                }
 
 
-def score(row):
-    res = 0
-    for col in row.index:
-        if col in thresholds.keys() and row[col] >= thresholds[col]:
-            res += row[col] * multipliers[col]
-    return res
-
-
-def calc_eta(df, test_size=1000):
-    full_length = len(df)
-    s_time = time()
-    df['temp'] = df.loc[:test_size].apply(lambda x: score(x), axis=1)
-    delta = time() - s_time
-    eta = timedelta(seconds=int(delta / test_size * full_length))
-    now = datetime.now()
-    time_eta = (datetime.now() + eta).replace(microsecond=0)
-    if now.day == time_eta.day and now.month == time_eta.month:
-        time_eta = str(time_eta)[11:]
-    print(f'ETA: {eta} | done at: {time_eta}')
-
-
-def calc_scores(df, column_name='score'):
-    df[column_name] = df.apply(lambda x: score(x), axis=1)
-    return df
-
-
-# calc_eta(scores)
-# scores = calc_scores(scores)
-
-
 def plot_distribution(x, title='No title', range_=None):
     facecolor = '#EAEAEA'
     color_bars = '#3475D0'
@@ -130,13 +100,44 @@ def plot_distribution(x, title='No title', range_=None):
     print(f'saved plot: "{title}.png"')
 
 
-# plot_distribution(scores['score'], 'score', range_=(2, scores['score'].max()))
-# plot_distribution(scores['total'], 'score', range_=(2, scores['score'].max()))
+def plot_all(df):
+    plot_distribution(df['score'], 'score', range_=(2, df['score'].max()))
+    plot_distribution(df['total'], 'score', range_=(2, df['score'].max()))
 
-for col in scores.columns:
-    if col not in {'total', 'score', 'index1', 'index2'}:
-        # plot_distribution(scores[col], col)
-        pass
+    for col in df.columns:
+        if col not in {'total', 'score', 'index1', 'index2'}:
+            plot_distribution(df[col], col)
 
+
+def score(row):
+    res = 0
+    for col in row.index:
+        if col in thresholds.keys() and row[col] >= thresholds[col]:
+            res += row[col] * multipliers[col]
+    return res
+
+
+def calc_eta(df, test_size=1000):
+    full_length = len(df)
+    s_time = time()
+    df['temp'] = df.loc[:test_size].apply(lambda x: score(x), axis=1)
+    delta = time() - s_time
+    eta = timedelta(seconds=int(delta / test_size * full_length))
+    now = datetime.now()
+    time_eta = (datetime.now() + eta).replace(microsecond=0)
+    if now.day == time_eta.day and now.month == time_eta.month:
+        time_eta = str(time_eta)[11:]
+    print(f'ETA: {eta} | done at: {time_eta}')
+
+
+def calc_scores(df, column_name='score'):
+    df[column_name] = df.apply(lambda x: score(x), axis=1)
+    return df
+
+
+calc_eta(scores)
+scores = calc_scores(scores)
+
+plot_all(scores)
 
 # scores.to_pickle('data/generated/scores.pkl')
