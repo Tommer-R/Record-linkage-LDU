@@ -4,10 +4,10 @@ import textdistance as td
 from time import time
 import multiprocessing as mp
 import numpy as np
-from datetime import timedelta
+from datetime import timedelta, datetime
 
-hw = pd.read_csv('data/processed/hw_processed.csv')
-lda = pd.read_csv('data/processed/lda_processed.csv')
+hw = pd.read_pickle('data/processed/hw_processed.pkl')
+lda = pd.read_pickle('data/processed/lda_processed.pkl')
 
 
 def validate_strings(df):
@@ -95,7 +95,8 @@ compare_method = {
     'state': td.levenshtein.normalized_similarity,
     'zip': td.levenshtein.normalized_similarity,
     'country': td.levenshtein.normalized_similarity,
-    'phone': td.levenshtein.normalized_similarity
+    'phone': td.levenshtein.normalized_similarity,
+    'group': td.levenshtein.normalized_similarity
 }
 
 
@@ -154,13 +155,16 @@ def worker(df1, df2, links, res_dict, n_proc):
 
         if n_proc == 0:
             percent_done = round(counter / len(links) * 100, 5)
-            # percent_done = counter / len(links) * 100
             if percent_done in show_percents:
                 delta = int(time() - s_time)
                 run_time = str(timedelta(seconds=delta))
                 seconds = int(delta / percent_done * (100 - percent_done))
-                eta = str(timedelta(seconds=seconds))
-                print(f'finished: {round(percent_done, 1)}% | run time: {run_time} | ETA: {eta}')
+                eta = timedelta(seconds=seconds)
+                now = datetime.now()
+                time_eta = (datetime.now() + eta).replace(microsecond=0)
+                if now.day == time_eta.day and now.month == time_eta.month:
+                    time_eta = str(time_eta)[11:]
+                print(f'finished: {round(percent_done, 1)}% | run time: {run_time} | ETA: {eta} | done at: {time_eta}')
 
     res_scores['total'] = res_scores.drop(columns=['index1', 'index2']).sum(axis=1)
     res_scores = res_scores.astype(float)
@@ -191,4 +195,5 @@ if __name__ == "__main__":
     frames = [return_dict[i] for i in range(proc_num)]
     scores = pd.concat(frames, ignore_index=True)
     scores.to_pickle('data/generated/scores.pkl')
+    print('finished all operations')
 #     description = scores.describe()
