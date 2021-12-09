@@ -1,16 +1,18 @@
 import numpy as np
 import pandas as pd
-from time import time
-from datetime import datetime, timedelta
-
+from tqdm import tqdm
 from matplotlib import pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
+
+tqdm.pandas()
 
 hw = pd.read_pickle('data/processed/hw_processed.pkl')
 lda = pd.read_pickle('data/processed/lda_processed.pkl')
 hw_raw = pd.read_csv('data/raw/HeroWeb Accounts.csv', delimiter=';')
 lda_raw = pd.read_csv('data/raw/Priority Customers.csv', delimiter=';')
 scores = pd.read_pickle('data/generated/scores.pkl')
+
+scores = scores[:]
 
 
 def evaluate_matches(df, plot=True):
@@ -34,7 +36,7 @@ def evaluate_matches(df, plot=True):
     percent_false = round(len(verified_false) / len(df) * 100, 2)
     percent_non_verified = 100 - percent_false - percent_verified
 
-    print('====================== REPORT ======================')
+    print('\n====================== REPORT ======================')
     print(f'total matches: {len(df)}')
     print(f'total true matches: {num_true_matches}')
     print(f'verified matches: {len(verified)}')
@@ -43,6 +45,7 @@ def evaluate_matches(df, plot=True):
     print(f'of total true matches found: {round(len(verified) / num_true_matches * 100, 2)}%')
     print(f'verified share: {percent_verified}%')
     print(f'false share: {percent_false}%')
+    print('====================================================\n')
 
     if plot:
         face_color = '#EAEAEA'
@@ -151,6 +154,68 @@ def plot_all(df):
             plot_distribution(df[col], col)
 
 
+def plot_combined(df, min_=3):
+    face_color = '#EAEAEA'
+    color_bars = '#3475D0'
+    txt_color1 = '#252525'
+    txt_color2 = '#004C74'
+
+    columns = [c for c in df.columns if c not in {'index1', 'index2'}][::-1]
+
+    fig, axs = plt.subplots(len(columns), figsize=(20, len(columns)*6), facecolor=face_color)
+    for i, col in enumerate(columns):
+        x = df[col]
+        axs[i].set_facecolor(face_color)
+        if col in {'total', 'score'}:
+            r = (min_, x.max())
+        else:
+            r = None
+        n, bins, patches = axs[i].hist(x, color=color_bars, bins=10, range=r)
+
+        # grid
+        minor_locator = AutoMinorLocator(2)
+        plt.gca().xaxis.set_minor_locator(minor_locator)
+        axs[i].grid(which='minor', color=face_color, lw=0.5)
+        xticks = [(bins[idx + 1] + value) / 2 for idx, value in enumerate(bins[:-1])]
+        xticks_labels = [f"{round(value, 1)}-{round(bins[idx + 1], 1)}" for idx, value in enumerate(bins[:-1])]
+        axs[i].set_xticks(xticks, labels=xticks_labels, c=txt_color1, fontsize=13)
+
+        # remove major and minor ticks from the x axis, but keep the labels
+        axs[i].tick_params(axis='x', which='both', length=0)
+        # remove y ticks
+        axs[i].set_yticks([])
+
+        text_str = '\n'.join((
+            f'mean={round(x.mean(), 1)}',
+            f'median={round(float(np.median(x)), 1)}',
+            f'std={round(x.std(), 1)}',))
+
+        # these are matplotlib.patch.Patch properties
+        props = dict(boxstyle='round', facecolor=face_color, alpha=0.5)
+
+        # place a text box in upper left in axes coordinates
+        axs[i].text(0.85, 0.95, text_str, transform=axs[i].transAxes, fontsize=14,
+                verticalalignment='top', horizontalalignment='center', bbox=props)
+
+        # Hide the right and top spines
+        axs[i].spines['bottom'].set_visible(False)
+        axs[i].spines['left'].set_visible(False)
+        axs[i].spines['right'].set_visible(False)
+        axs[i].spines['top'].set_visible(False)
+
+        for idx, value in enumerate(n):
+            if value > 0:
+                axs[i].text(xticks[idx], value + 10, "{:,}".format(value), ha='center', fontsize=16, c=txt_color1)
+        axs[i].set_title(col, loc='left', fontsize=20, c=txt_color1)
+        axs[i].set_xlabel('Count', c=txt_color2, fontsize=14)
+        axs[i].set_ylabel('Score', c=txt_color2, fontsize=14)
+        plt.tight_layout()
+
+    plt.savefig(f'plots/combined_plot.png', facecolor=face_color)
+    plt.clf()
+    print(f'saved plot: "combined_plot.png"')
+
+
 hw = validate_strings(hw)
 lda = validate_strings(lda)
 hw_raw = validate_strings(hw_raw)
@@ -177,7 +242,7 @@ multipliers = {'email': 1,
                'zip': 1,
                'country': 0.25,
                'name': 1,
-               'address': 0.8,
+               'address': 1,
                }
 
 
@@ -189,47 +254,44 @@ def score(row):
     return res
 
 
-def calc_eta(df, test_size=10000):
-    slice_ = df.loc[:test_size].copy()
-    full_length = len(df)
-    s_time = time()
+def calc_scores(df, column_name='score', func=None, vectorize: bool = True, save: bool = False):
+    print('started finale score calculation')
+    if vectorize:
+        df[column_name] = (df['email'] * multipliers['email'] * (df['email'] >= thresholds['email'])) + \
+                          (df['company_name'] * multipliers['company_name'] * (
+                                  df['company_name'] >= thresholds['company_name'])) + \
+                          (df['group'] * multipliers['group'] * (df['group'] >= thresholds['group'])) + \
+                          (df['phone'] * multipliers['phone'] * (df['phone'] >= thresholds['phone'])) + \
+                          (df['city'] * multipliers['city'] * (df['city'] >= thresholds['city'])) + \
+                          (df['state'] * multipliers['state'] * (df['state'] >= thresholds['state'])) + \
+                          (df['zip'] * multipliers['zip'] * (df['zip'] >= thresholds['zip'])) + \
+                          (df['country'] * multipliers['country'] * (df['country'] >= thresholds['country'])) + \
+                          (df['name'] * multipliers['name'] * (df['name'] >= thresholds['name'])) + \
+                          (df['address'] * multipliers['address'] * (df['address'] >= thresholds['address']))
+    else:
+        if func is None:
+            func = score
+        df[column_name] = df.progress_apply(lambda x: func(x), axis=1)
 
-    slice_['temp'] = slice_.apply(lambda x: score(x), axis=1)
-    delta = time() - s_time
-    eta = timedelta(seconds=int(delta / test_size * full_length))
-    now = datetime.now()
-    time_eta = (datetime.now() + eta).replace(microsecond=0)
-    if now.day == time_eta.day and now.month == time_eta.month:
-        time_eta = str(time_eta)[11:]
-    print(f'ETA: {eta} | done at: {time_eta}')
-
-
-def calc_scores(df, column_name='score', save=False):
-    df[column_name] = df.apply(lambda x: score(x), axis=1)
     if save:
-        scores.to_pickle('data/generated/scores.pkl')
+        df.to_pickle('data/generated/scores.pkl')
+        print('saved new scores in: data/generated/scores.pkl')
+    print('finished finale score calculation')
+
     return df
 
 
-calc_eta(scores)
-scores = calc_scores(scores, save=False)
-
-description = scores.describe()
-
-plot_all(scores)
-
-
-def match_filter(min_score, full_match_at=1, all_match: list[str] = None, some_match: list[str] = None):
-    mask = scores['score'] >= min_score
+def match_filter(df, min_score, full_match_at=1, all_match: list[str] = None, some_match: list[str] = None):
+    mask = df['score'] >= min_score
 
     if all_match is not None:
         for col in all_match:
-            mask = mask & scores[col] >= full_match_at
+            mask = mask & df[col] >= full_match_at
 
     if some_match is not None:
         temp_masks = []
         for col in some_match:
-            temp_masks.append(scores[col] >= full_match_at)
+            temp_masks.append(df[col] >= full_match_at)
         temp_mask = temp_masks[0]
         for m in temp_masks[1:]:
             temp_mask = temp_mask | m
@@ -239,6 +301,14 @@ def match_filter(min_score, full_match_at=1, all_match: list[str] = None, some_m
     return mask
 
 
-matches = scores[match_filter(5)]
+scores = calc_scores(scores, func=score, vectorize=True, save=False)  # finale score through score formula
+
+description = scores.describe()
+
+# plot_all(scores)
+
+plot_combined(scores)
+
+matches = scores[match_filter(scores, 5)]
 
 evaluate_matches(matches)

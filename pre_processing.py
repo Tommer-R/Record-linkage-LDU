@@ -4,6 +4,7 @@ import re
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from itertools import product
+import us
 
 
 # nltk.download('stopwords')
@@ -21,6 +22,7 @@ for s in state_codes:
     except ValueError:
         pass
 
+
 address_stopwords = all_stopwords + ["street", "st", "place", "rd", "road", 'square']
 name_stopwords = all_stopwords + ['co', 'corp', 'inc', 'company', 'limited', 'llc']
 
@@ -36,10 +38,19 @@ hw.columns = [c.replace('account_', '') for c in list(hw.columns)]  # simplify x
 hw_columns_to_drop = ['active', 'date_joined', 'date_expires', 'referred_by', 'locked', 'terms', 'sales_rep',
                       'is_sales_rep', 'tax_id', 'tax_exempt', 'long', 'lat', 'date_last_ordered', 'total_orders',
                       'total_revenue', 'notes', 'store_optin']
-lda_columns_to_drop = ['city & state']
+lda_columns_to_drop = ['city & state', 'state code']
 
 hw.drop(columns=hw_columns_to_drop, inplace=True)
 lda.drop(columns=lda_columns_to_drop, inplace=True)
+
+
+def fix_state(x: str):
+    a = us.states.lookup(x)
+    if a is not None:
+        return a.name.lower()
+    else:
+        return x
+
 
 # rename columns to match
 """
@@ -76,7 +87,12 @@ zip code > zip
 hw account > hw id
 """
 lda.columns = ['id', 'name', 'phone', 'fax', 'email', 'group', 'address1', 'address2', 'address3', 'city',
-               'state code', 'state', 'zip', 'country', 'web_site', 'hw id']
+               'state', 'zip', 'country', 'web_site', 'hw id']
+
+hw['state'] = hw['state'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)  # fix state names
+hw['state2'] = hw['state2'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)  # fix state names
+lda['state'] = lda['state'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)  # fix state names
+
 
 lda_des = lda.describe()
 hw_des = hw.describe()
@@ -126,7 +142,6 @@ def merge_columns(df, col1, col2, drop=True):
             df.loc[i, col1].extend(df.loc[i, col2])
             temp_df.loc[i, col1] = df.loc[i, col1]
         elif type(df.loc[i, col1]) == str and type(df.loc[i, col2]) == str:
-            # temp_df.loc[i, col1] = [df.loc[i, col1], df.loc[i, col2]]
             temp_df.loc[i, col1] = df.loc[i, col1] + ' ' + df.loc[i, col2]
         elif type(df.loc[i, col1]) == str and type(df.loc[i, col2]) == list:
             df.loc[i, col2].append(df.loc[i, col1])
@@ -159,7 +174,6 @@ lda['address1'] = lda['address1'].apply(lambda x: normalize_address(x) if pd.not
 lda['address2'] = lda['address2'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
 lda['address3'] = lda['address3'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
 lda['city'] = lda['city'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
-lda['state code'] = lda['state code'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
 lda['state'] = lda['state'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
 lda['zip'] = lda['zip'].apply(lambda x: normalize_number(x) if pd.notnull(x) else x)
 lda['country'] = lda['country'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)

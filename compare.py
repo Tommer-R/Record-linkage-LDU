@@ -5,6 +5,7 @@ from time import time
 import multiprocessing as mp
 import numpy as np
 from datetime import timedelta, datetime
+from tqdm import tqdm
 
 hw = pd.read_pickle('data/processed/hw_processed.pkl')
 lda = pd.read_pickle('data/processed/lda_processed.pkl')
@@ -22,37 +23,6 @@ lda = validate_strings(lda)
 
 hw = hw.loc[:]
 lda = lda.loc[:]
-"""
-def compare_records(rec1, rec2):
-    scores_ = {}
-
-    for col in rec1.index:
-        if col not in set(hw_to_lda.keys()):
-            continue
-        temp_scores = []
-        for col2 in hw_to_lda[col]:
-            if type(rec1[col]) == float and not pd.notnull(rec1[col]) or \
-                    type(rec2[col2]) == float and not pd.notnull(rec2[col2]):
-                temp_scores.append(0)
-            elif type(rec1[col]) == list and type(rec2[col2]) == list:
-                temp_scores.append(compare_method['tokens'](rec1[col], rec2[col2]))
-
-            elif type(rec1[col]) == str and type(rec2[col2]) == str:
-                temp_scores.append(compare_method['string'](rec1[col], rec2[col2]))
-
-            else:
-                warnings.warn(f'wrong types: {rec1[col]} = {type(rec1[col])} | {rec2[col2]} = {type(rec2[col2])}')
-
-        scores_[col] = float(max(temp_scores))
-
-    for k, v in property_merge.items():
-        scores_[k] = float(max([scores_[a] for a in v]))
-        for a in v:
-            if a != k:
-                scores_.pop(a)
-
-    return scores_
-"""
 
 hw_to_lda = {
     'email': ['email'],
@@ -64,7 +34,7 @@ hw_to_lda = {
     'address1': ['address'],
     'address2': ['address'],
     'city': ['city'],
-    'state': ['state code', 'state'],
+    'state': ['state'],
     'zip': ['zip'],
     'country': ['country'],
     'phone2': ['phone', 'fax'],
@@ -100,22 +70,22 @@ compare_method = {
 }
 
 
-def compare_records(rec1, rec2):
+def compare_records(rec1, rec2, idx1, idx2):
     res = {}
 
-    for col in rec1.index:
+    for col in idx1.keys():
         if col not in set(hw_to_lda.keys()):
             continue
         temp_scores = []
         for col2 in hw_to_lda[col]:
-            if type(rec1[col]) == float and not pd.notnull(rec1[col]) or \
-                    type(rec2[col2]) == float and not pd.notnull(rec2[col2]):
+            if type(rec1[idx1[col]]) == float and not pd.notnull(rec1[idx1[col]]) or \
+                    type(rec2[idx2[col2]]) == float and not pd.notnull(rec2[idx2[col2]]):
                 temp_scores.append(0)
 
             elif True in [key in col for key in compare_method.keys()]:
                 for key in compare_method.keys():
                     if key in col:
-                        temp_scores.append(compare_method[key](rec1[col], rec2[col2]))
+                        temp_scores.append(compare_method[key](rec1[idx1[col]], rec2[idx2[col2]]))
                         continue
 
             else:
@@ -133,29 +103,41 @@ def compare_records(rec1, rec2):
 
 
 def worker(df1, df2, links, res_dict, n_proc):
-    print(f'started process num {n_proc} with length {len(links)}')
+    p_bar = tqdm(total=len(links))
+    # print(f'started process num {n_proc} with length {len(links)}')
+    p_bar.write(f'started process num {n_proc} with length {len(links)}')
     s_time = time()
+    last_percent = 0.0
 
-    show_percents = set([n / 10 for n in range(1, 1010)])
+    indexer1 = dict(zip(list(df1.columns), list(range(df1.shape[1]))))
+    indexer2 = dict(zip(list(df2.columns), list(range(df2.shape[1]))))
 
-    index = list(range(len(links)))
-    columns = ['index1', 'index2'] + list(compare_records(df1.loc[0], df2.loc[0]).keys())
-    res_scores = pd.DataFrame(index=index, columns=columns)
+    res_scores = {}
+    columns = ['index1', 'index2'] + list(compare_records(df1.values[0], df2.values[0], indexer1, indexer2).keys())
+    for col in columns:
+        res_scores[col] = []
 
     counter = 0
+    # if n_proc == 0:
+        # p_bar = tqdm(total=len(links))
 
     for pair in links:
 
-        temp = compare_records(df1.loc[pair[0]], df2.loc[pair[1]])
+        temp = compare_records(df1.values[pair[0]], df2.values[pair[1]], indexer1, indexer2)
         temp['index1'] = pair[0]
         temp['index2'] = pair[1]
-        res_scores.loc[counter] = temp
+
+        for key, value in temp.items():
+            res_scores[key].append(value)
 
         counter += 1
 
+        # show progress
         if n_proc == 0:
-            percent_done = round(counter / len(links) * 100, 5)
-            if percent_done in show_percents:
+            p_bar.update()
+            percent_done = round(counter / len(links) * 100, 1)
+            if percent_done != last_percent:
+                last_percent = percent_done
                 delta = int(time() - s_time)
                 run_time = str(timedelta(seconds=delta))
                 seconds = int(delta / percent_done * (100 - percent_done))
@@ -164,11 +146,12 @@ def worker(df1, df2, links, res_dict, n_proc):
                 time_eta = (datetime.now() + eta).replace(microsecond=0)
                 if now.day == time_eta.day and now.month == time_eta.month:
                     time_eta = str(time_eta)[11:]
-                print(f'finished: {round(percent_done, 1)}% | run time: {run_time} | ETA: {eta} | done at: {time_eta}')
+                # print(f'finished: {percent_done}% | run time: {run_time} | ETA: {eta} | done at: {time_eta}')
 
-    res_scores['total'] = res_scores.drop(columns=['index1', 'index2']).sum(axis=1)
-    res_scores = res_scores.astype(float)
-    res_dict[n_proc] = res_scores
+    res_df = pd.DataFrame(data=res_scores)
+    res_df['total'] = res_df.drop(columns=['index1', 'index2']).sum(axis=1)
+    res_df = res_df.astype(float)
+    res_dict[n_proc] = res_df
     print(f'finished process num {n_proc}')
 
 
@@ -196,4 +179,3 @@ if __name__ == "__main__":
     scores = pd.concat(frames, ignore_index=True)
     scores.to_pickle('data/generated/scores.pkl')
     print('finished all operations')
-#     description = scores.describe()
