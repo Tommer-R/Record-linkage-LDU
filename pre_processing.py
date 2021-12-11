@@ -5,6 +5,7 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from itertools import product
 import us
+import country_converter as coco
 
 
 # nltk.download('stopwords')
@@ -28,7 +29,7 @@ name_stopwords = all_stopwords + ['co', 'corp', 'inc', 'company', 'limited', 'll
 
 lda = pd.read_csv('data/raw/Priority Customers.csv', delimiter=';')
 hw = pd.read_csv('data/raw/HeroWeb Accounts.csv', delimiter=';')
-
+print('imported data')
 # lda = lda[:500]
 # hw = hw[:500]
 
@@ -42,12 +43,21 @@ lda_columns_to_drop = ['city & state', 'state code']
 
 hw.drop(columns=hw_columns_to_drop, inplace=True)
 lda.drop(columns=lda_columns_to_drop, inplace=True)
+print('dropped columns')
 
 
 def fix_state(x: str):
     a = us.states.lookup(x)
     if a is not None:
         return a.name.lower()
+    else:
+        return x
+
+
+def fix_country(x: str):
+    a = coco.convert(x, to='name_short')
+    if a != 'not found':
+        return a.lower()
     else:
         return x
 
@@ -88,11 +98,19 @@ hw account > hw id
 """
 lda.columns = ['id', 'name', 'phone', 'fax', 'email', 'group', 'address1', 'address2', 'address3', 'city',
                'state', 'zip', 'country', 'web_site', 'hw id']
+print('renamed columns')
 
 hw['state'] = hw['state'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)  # fix state names
 hw['state2'] = hw['state2'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)  # fix state names
 lda['state'] = lda['state'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)  # fix state names
+print('unified states')
 
+hw['country'] = hw['country'].apply(lambda x: 'usa' if pd.notnull(x) and x.lower() == 'un' else x)  # fix country names
+hw['country'] = hw['country'].apply(lambda x: fix_country(x) if pd.notnull(x) else x)  # fix country names
+hw['country2'] = hw['country2'].apply(lambda x: 'usa' if pd.notnull(x) and x.lower() == 'un' else x)  # fix country names
+hw['country2'] = hw['country2'].apply(lambda x: fix_country(x) if pd.notnull(x) else x)  # fix country names
+lda['country'] = lda['country'].apply(lambda x: fix_country(x) if pd.notnull(x) else x)  # fix country names
+print('unified countries')
 
 lda_des = lda.describe()
 hw_des = hw.describe()
@@ -202,6 +220,7 @@ hw['state2'] = hw['state2'].apply(lambda x: normalize_address(x) if pd.notnull(x
 hw['zip2'] = hw['zip2'].apply(lambda x: normalize_number(x) if pd.notnull(x) else x)
 hw['country2'] = hw['country2'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
 hw['phone3'] = hw['phone3'].apply(lambda x: normalize_number(x) if pd.notnull(x) else x)
+print('normalized columns')
 
 # convert to string
 for col, i in product(list(hw.columns), hw.index):
@@ -211,9 +230,8 @@ for col, i in product(list(hw.columns), hw.index):
 # hw = merge_columns(hw, 'address1', 'address2')
 # hw = merge_columns(hw, 'saddress1', 'saddress2')
 hw = merge_columns(hw, 'first_name', 'last_name')
-
-
 hw.rename({'first_name': 'name1', 'saddress1': 'address3', 'saddress2': 'address4'}, axis=1, inplace=True)
+
 
 # remove duplicate values within a record
 for i in hw.index:
@@ -248,7 +266,7 @@ lda = merge_columns(lda, 'address1', 'address2')
 lda = merge_columns(lda, 'address1', 'address3')
 
 lda = lda.rename({'address1': 'address'}, axis=1)
-
+print('merged columns')
 
 hw.replace([], np.nan, inplace=True)
 lda.replace([], np.nan, inplace=True)

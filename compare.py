@@ -103,9 +103,7 @@ def compare_records(rec1, rec2, idx1, idx2):
 
 
 def worker(df1, df2, links, res_dict, n_proc):
-    p_bar = tqdm(total=len(links))
-    # print(f'started process num {n_proc} with length {len(links)}')
-    p_bar.write(f'started process num {n_proc} with length {len(links)}')
+    print(f'started process num {n_proc} with length {len(links)}')
     s_time = time()
     last_percent = 0.0
 
@@ -119,9 +117,9 @@ def worker(df1, df2, links, res_dict, n_proc):
 
     counter = 0
     # if n_proc == 0:
-        # p_bar = tqdm(total=len(links))
+    # p_bar = tqdm(total=len(links))
 
-    for pair in links:
+    for pair in tqdm(links):
 
         temp = compare_records(df1.values[pair[0]], df2.values[pair[1]], indexer1, indexer2)
         temp['index1'] = pair[0]
@@ -131,22 +129,6 @@ def worker(df1, df2, links, res_dict, n_proc):
             res_scores[key].append(value)
 
         counter += 1
-
-        # show progress
-        if n_proc == 0:
-            p_bar.update()
-            percent_done = round(counter / len(links) * 100, 1)
-            if percent_done != last_percent:
-                last_percent = percent_done
-                delta = int(time() - s_time)
-                run_time = str(timedelta(seconds=delta))
-                seconds = int(delta / percent_done * (100 - percent_done))
-                eta = timedelta(seconds=seconds)
-                now = datetime.now()
-                time_eta = (datetime.now() + eta).replace(microsecond=0)
-                if now.day == time_eta.day and now.month == time_eta.month:
-                    time_eta = str(time_eta)[11:]
-                # print(f'finished: {percent_done}% | run time: {run_time} | ETA: {eta} | done at: {time_eta}')
 
     res_df = pd.DataFrame(data=res_scores)
     res_df['total'] = res_df.drop(columns=['index1', 'index2']).sum(axis=1)
@@ -163,7 +145,7 @@ if __name__ == "__main__":
 
     manager = mp.Manager()
     return_dict = manager.dict()
-    proc_num = mp.cpu_count()-2
+    proc_num = mp.cpu_count() - 2
     link_splits = np.array_split(possible_links, proc_num)
 
     jobs = []

@@ -16,65 +16,64 @@ scores = scores[:]
 
 
 def evaluate_matches(df, plot=True):
-    verified = []
-    verified_false = []
-    non_verified = []
-    for i in df.index:
-        match = df.loc[i]
-        hw_index = match['index1']
-        lda_index = match['index2']
+    print('evaluating matches')
+    verified_ = []
+    verified_false_ = []
+    non_verified_ = []
+    for i in tqdm(df.index):
+        match_ = df.loc[i]
+        hw_index = match_['index1']
+        lda_index = match_['index2']
         if pd.notnull(lda_raw.loc[lda_index, 'HW Account']):
             if lda_raw.loc[lda_index, 'HW Account'] == hw_raw.loc[hw_index, 'account_id']:
-                verified.append(i)
+                verified_.append(i)
             else:
-                verified_false.append(i)
+                verified_false_.append(i)
         else:
-            non_verified.append(i)
+            non_verified_.append(i)
 
     num_true_matches = len(lda_raw.loc[pd.notnull(lda_raw['HW Account'])])
-    percent_verified = round(len(verified) / len(df) * 100, 2)
-    percent_false = round(len(verified_false) / len(df) * 100, 2)
+    percent_verified = round(len(verified_) / len(df) * 100, 2)
+    percent_false = round(len(verified_false_) / len(df) * 100, 2)
     percent_non_verified = 100 - percent_false - percent_verified
 
     print('\n====================== REPORT ======================')
     print(f'total matches: {len(df)}')
     print(f'total true matches: {num_true_matches}')
-    print(f'verified matches: {len(verified)}')
-    print(f'verified false matches: {len(verified_false)}')
-    print(f'non verified matches: {len(non_verified)}')
-    print(f'of total true matches found: {round(len(verified) / num_true_matches * 100, 2)}%')
+    print(f'verified matches: {len(verified_)}')
+    print(f'verified false matches: {len(verified_false_)}')
+    print(f'non verified matches: {len(non_verified_)}')
+    print(f'of total true matches found: {round(len(verified_) / num_true_matches * 100, 2)}%')
     print(f'verified share: {percent_verified}%')
     print(f'false share: {percent_false}%')
     print('====================================================\n')
 
     if plot:
         face_color = '#EAEAEA'
-        color_bars = '#3475D0'
-        txt_color1 = '#252525'
-        txt_color2 = '#004C74'
 
         # Pie chart, where the slices will be ordered and plotted counter-clockwise:
-        labels = 'verified', 'non-verified', 'false'
+        labels = 'True', 'non-verified', 'False'
         sizes = [percent_verified, percent_non_verified, percent_false]
         explode = (0, 0, 0)  # only "explode" one slice
 
         fig1, ax1 = plt.subplots(1, figsize=(10, 6), facecolor=face_color)
+        ax1.set_facecolor(face_color)
         ax1.pie(sizes, explode=explode, labels=labels, autopct='%1.2f%%',
-                shadow=True, startangle=90)
+                shadow=False, startangle=90)
         ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
 
         text_str = '\n'.join((
             f'total matches: {len(df)}',
             f'total true matches: {num_true_matches}',
-            f'verified matches: {len(verified)}',
-            f'verified false matches: {len(verified_false)}',
-            f'non verified matches: {len(non_verified)}'))
+            f'verified matches: {len(verified_)}',
+            f'verified false matches: {len(verified_false_)}',
+            f'non verified matches: {len(non_verified_)}'))
 
         # these are matplotlib.patch.Patch properties
-        props = dict(boxstyle='round', alpha=0.5)
+        props = dict(boxstyle='round', facecolor=face_color, alpha=0.5)
 
         # place a text box in upper left in axes coordinates
-        ax1.text(0, 1, text_str, transform=ax1.transAxes, fontsize=14,
+        ax1.text(0.05, 1, text_str, transform=ax1.transAxes, fontsize=14,
                  verticalalignment='top', horizontalalignment='center', bbox=props)
 
         plt.title('Matches evaluation')
@@ -82,7 +81,7 @@ def evaluate_matches(df, plot=True):
         plt.show()
         plt.clf()
 
-    return verified, verified_false, non_verified
+    return df.loc[verified_], df.loc[verified_false_], df.loc[non_verified_]
 
 
 def validate_strings(df):
@@ -106,11 +105,11 @@ def plot_distribution(x, title='No title', range_=None):
     minor_locator = AutoMinorLocator(2)
     plt.gca().xaxis.set_minor_locator(minor_locator)
     plt.grid(which='minor', color=face_color, lw=0.5)
-    xticks = [(bins[idx + 1] + value) / 2 for idx, value in enumerate(bins[:-1])]
-    xticks_labels = [f"{round(value, 1)}-{round(bins[idx + 1], 1)}" for idx, value in enumerate(bins[:-1])]
-    plt.xticks(xticks, labels=xticks_labels, c=txt_color1, fontsize=13)
+    x_ticks = [(bins[idx + 1] + value) / 2 for idx, value in enumerate(bins[:-1])]
+    x_ticks_labels = [f"{round(value, 1)}-{round(bins[idx + 1], 1)}" for idx, value in enumerate(bins[:-1])]
+    plt.xticks(x_ticks, labels=x_ticks_labels, c=txt_color1, fontsize=13)
 
-    # remove major and minor ticks from the x axis, but keep the labels
+    # remove major and minor ticks from the x-axis, but keep the labels
     ax.tick_params(axis='x', which='both', length=0)
     # remove y ticks
     plt.yticks([])
@@ -135,7 +134,7 @@ def plot_distribution(x, title='No title', range_=None):
 
     for idx, value in enumerate(n):
         if value > 0:
-            plt.text(xticks[idx], value + 10, "{:,}".format(value), ha='center', fontsize=16, c=txt_color1)
+            plt.text(x_ticks[idx], value + 10, "{:,}".format(value), ha='center', fontsize=16, c=txt_color1)
     plt.title(title, loc='left', fontsize=20, c=txt_color1)
     plt.xlabel('Count', c=txt_color2, fontsize=14)
     plt.ylabel('Score', c=txt_color2, fontsize=14)
@@ -162,7 +161,7 @@ def plot_combined(df, min_=3):
 
     columns = [c for c in df.columns if c not in {'index1', 'index2'}][::-1]
 
-    fig, axs = plt.subplots(len(columns), figsize=(20, len(columns)*6), facecolor=face_color)
+    fig, axs = plt.subplots(len(columns), figsize=(20, len(columns) * 6), facecolor=face_color)
     for i, col in enumerate(columns):
         x = df[col]
         axs[i].set_facecolor(face_color)
@@ -186,16 +185,16 @@ def plot_combined(df, min_=3):
         axs[i].set_yticks([])
 
         text_str = '\n'.join((
-            f'mean={round(x.mean(), 1)}',
-            f'median={round(float(np.median(x)), 1)}',
-            f'std={round(x.std(), 1)}',))
+            f'mean={round(x.mean(), 2)}',
+            f'median={round(float(np.median(x)), 2)}',
+            f'std={round(x.std(), 2)}',))
 
         # these are matplotlib.patch.Patch properties
         props = dict(boxstyle='round', facecolor=face_color, alpha=0.5)
 
         # place a text box in upper left in axes coordinates
         axs[i].text(0.85, 0.95, text_str, transform=axs[i].transAxes, fontsize=14,
-                verticalalignment='top', horizontalalignment='center', bbox=props)
+                    verticalalignment='top', horizontalalignment='center', bbox=props)
 
         # Hide the right and top spines
         axs[i].spines['bottom'].set_visible(False)
@@ -305,10 +304,48 @@ scores = calc_scores(scores, func=score, vectorize=True, save=False)  # finale s
 
 description = scores.describe()
 
+
 # plot_all(scores)
 
-plot_combined(scores)
+# plot_combined(scores)
 
-matches = scores[match_filter(scores, 5)]
 
-evaluate_matches(matches)
+# matches = scores[match_filter(scores, 5)]
+
+def match(df):
+    masks = []
+
+    name = df['name'] >= 0.8
+    company = df['company_name'] >= 0.9
+    email = df['email'] >= 0.9
+    phone = df['phone'] >= 0.9
+
+    address = df['address'] >= 0.9
+
+    city = df['city'] >= 1
+    state = df['state'] >= 1
+    zip_ = df['zip'] >= 1
+    country = df['country'] >= 1
+
+    score1 = df['score'] >= 5.9
+    score2 = df['score'] >= 3.4
+
+    masks.append(score1)
+    masks.append(score2 & ((name | company) & (email | phone)))
+    masks.append(score2 & city & state & zip_ & country & address)
+
+    print(f"score mask: {len(df.loc[masks[0]])} | unique: {len(df.loc[masks[0] & ~ (masks[1] | masks[2])])}")
+    print(f"contact mask: {len(df.loc[masks[1]])} | unique: {len(df.loc[masks[1] & ~ (masks[0] | masks[2])])}")
+    print(f"address mask: {len(df.loc[masks[2]])} | unique: {len(df.loc[masks[2] & ~ (masks[1] | masks[0])])}")
+
+    mask = masks[0]
+    for m in masks:
+        mask = mask | m
+
+    return df.loc[mask]
+
+
+matches = match(scores)
+print(f'generated matches: {len(matches)}')
+
+verified, verified_false, non_verified = evaluate_matches(matches)
