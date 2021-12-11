@@ -79,7 +79,7 @@ scountry >
 telephone2 > phone2
 """
 hw.columns = ['id', 'email', 'company_name', 'last_name', 'first_name', 'name2', 'group', 'phone',
-              'address1', 'address2', 'city', 'state', 'zip', 'country', 'phone2', 'saddress1',
+              'address', 'address2', 'city', 'state', 'zip', 'country', 'phone2', 'saddress1',
               'saddress2', 'city2', 'state2', 'zip2', 'country2', 'phone3']
 
 """
@@ -206,7 +206,7 @@ hw['first_name'] = hw['first_name'].apply(lambda x: normalize_name(x) if pd.notn
 hw['name2'] = hw['name2'].apply(lambda x: normalize_name(x) if pd.notnull(x) else x)
 hw['group'] = hw['group'].apply(lambda x: normalize_name(x) if pd.notnull(x) else x)
 hw['phone'] = hw['phone'].apply(lambda x: normalize_number(x) if pd.notnull(x) else x)
-hw['address1'] = hw['address1'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
+hw['address'] = hw['address'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
 hw['address2'] = hw['address2'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
 hw['city'] = hw['city'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
 hw['state'] = hw['state'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
@@ -227,15 +227,13 @@ for col, i in product(list(hw.columns), hw.index):
     if type(hw[col][i]) == float and pd.notnull(hw[col][i]):
         hw.loc[i, col] = str(hw.loc[i, col])
 
-# hw = merge_columns(hw, 'address1', 'address2')
-# hw = merge_columns(hw, 'saddress1', 'saddress2')
 hw = merge_columns(hw, 'first_name', 'last_name')
-hw.rename({'first_name': 'name1', 'saddress1': 'address3', 'saddress2': 'address4'}, axis=1, inplace=True)
+hw.rename({'first_name': 'name', 'saddress1': 'address3', 'saddress2': 'address4'}, axis=1, inplace=True)
 
 
 # remove duplicate values within a record
 for i in hw.index:
-    if hw.loc[i, 'address1'] == hw.loc[i, 'address2']:
+    if hw.loc[i, 'address'] == hw.loc[i, 'address2']:
         hw.loc[i, 'address2'] = np.nan
 
     if hw.loc[i, 'city'] == hw.loc[i, 'city2'] and type(hw.loc[i, 'address2']) == float and \
@@ -274,7 +272,4 @@ lda.replace([], np.nan, inplace=True)
 hw.to_pickle('data/processed/hw_processed.pkl')
 lda.to_pickle('data/processed/lda_processed.pkl')
 
-#hw.reindex(columns=['id', 'email', 'company_name', 'name1', 'name2', 'group', 'phone', 'phone2', 'phone3',
-#                    'address1', 'city', 'state', 'zip', 'country', 'address2',
-#                    'city2', 'state2', 'zip2', 'country2'])
-
+print('finished operations')

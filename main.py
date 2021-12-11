@@ -15,6 +15,61 @@ scores = pd.read_pickle('data/generated/scores.pkl')
 scores = scores[:]
 
 
+def group_matches(matches_):
+    print(f'grouping {len(matches_)} matches')
+    indexes1 = tuple(matches_['index1'])
+    indexes2 = tuple(matches_['index2'])
+    groups = [([indexes1[0]], [indexes2[0]])]
+    for idx1, idx2 in zip(indexes1[1:], indexes2[1:]):
+        i = 0
+        while True:
+            try:
+                group = groups[i]
+            except IndexError:
+                break
+
+            # print(groups)
+            if idx1 in group[0] and idx2 in group[1]:
+                i += 1
+            elif idx1 in group[0]:
+                group[1].append(idx2)
+            elif idx2 in group[1]:
+                group[0].append(idx1)
+            else:
+                if i + 1 == len(groups):
+                    groups.append(([idx1], [idx2]))
+                i += 1
+
+    return groups
+
+
+def show_matches(df1: pd.DataFrame, df2: pd.DataFrame, groups_: list[tuple[list[int], list[int]]]):
+    columns = list(set(list(df1.columns) + list(df2.columns))) + ['source']
+    res = {}
+    for c in columns:
+        res[c] = []
+
+    for group in groups_:
+        for idx in group[0]:
+            row = df1.loc[idx]
+            for col, val in zip(tuple(row.index), tuple(row.values)):
+                res[col].append(val)
+            for col in [item for item in columns if item not in list(row.index)]:
+                res[col].append('')
+            res['source'][-1] = 'hw'
+        for idx in group[1]:
+            row = df2.loc[idx]
+            for col, val in zip(tuple(row.index), tuple(row.values)):
+                res[col].append(val)
+            for col in [item for item in columns if item not in list(row.index)]:
+                res[col].append('')
+            res['source'][-1] = 'lda'
+        for col in res.keys():
+            res[col].append('')
+
+    return pd.DataFrame(data=res)
+
+
 def evaluate_matches(df, plot=True):
     print('evaluating matches')
     verified_ = []
@@ -215,36 +270,6 @@ def plot_combined(df, min_=3):
     print(f'saved plot: "combined_plot.png"')
 
 
-hw = validate_strings(hw)
-lda = validate_strings(lda)
-hw_raw = validate_strings(hw_raw)
-lda_raw = validate_strings(lda_raw)
-
-thresholds = {'email': 0.5,
-              'company_name': 0,
-              'group': 0.25,
-              'phone': 0.25,
-              'city': 0.5,
-              'state': 0.5,
-              'zip': 0,
-              'country': 0.5,
-              'name': 0,
-              'address': 0,
-              }
-
-multipliers = {'email': 1,
-               'company_name': 1,
-               'group': 0.1,
-               'phone': 1,
-               'city': 0.5,
-               'state': 0.25,
-               'zip': 1,
-               'country': 0.25,
-               'name': 1,
-               'address': 1,
-               }
-
-
 def score(row):
     res = 0
     for col in row.index:
@@ -280,63 +305,64 @@ def calc_scores(df, column_name='score', func=None, vectorize: bool = True, save
     return df
 
 
-def match_filter(df, min_score, full_match_at=1, all_match: list[str] = None, some_match: list[str] = None):
-    mask = df['score'] >= min_score
+hw = validate_strings(hw)
+lda = validate_strings(lda)
+hw_raw = validate_strings(hw_raw)
+lda_raw = validate_strings(lda_raw)
 
-    if all_match is not None:
-        for col in all_match:
-            mask = mask & df[col] >= full_match_at
+thresholds = {'email': 0.5,
+              'company_name': 0,
+              'group': 0.25,
+              'phone': 0.25,
+              'city': 0.5,
+              'state': 0.5,
+              'zip': 0,
+              'country': 0.5,
+              'name': 0,
+              'address': 0,
+              }
 
-    if some_match is not None:
-        temp_masks = []
-        for col in some_match:
-            temp_masks.append(df[col] >= full_match_at)
-        temp_mask = temp_masks[0]
-        for m in temp_masks[1:]:
-            temp_mask = temp_mask | m
-
-        mask = mask & temp_mask
-
-    return mask
-
-
+multipliers = {'email': 1,
+               'company_name': 1,
+               'group': 0.1,
+               'phone': 1,
+               'city': 0.5,
+               'state': 0.25,
+               'zip': 1,
+               'country': 0.25,
+               'name': 1,
+               'address': 1,
+               }
 scores = calc_scores(scores, func=score, vectorize=True, save=False)  # finale score through score formula
 
-description = scores.describe()
 
+# description = scores.describe()
 
 # plot_all(scores)
 
 # plot_combined(scores)
 
 
-# matches = scores[match_filter(scores, 5)]
-
 def match(df):
     masks = []
 
-    name = df['name'] >= 0.8
-    company = df['company_name'] >= 0.9
-    email = df['email'] >= 0.9
-    phone = df['phone'] >= 0.9
+    masks.append(df['score'] >= 5.9)
 
-    address = df['address'] >= 0.9
+    masks.append((df['score'] >= 3.4) & (((df['name'] >= 0.8) | (df['company_name'] >= 0.9)) &
+                                         ((df['email'] >= 0.9) | (df['phone'] >= 0.9))))
 
-    city = df['city'] >= 1
-    state = df['state'] >= 1
-    zip_ = df['zip'] >= 1
-    country = df['country'] >= 1
+    masks.append((df['score'] >= 3.4) & (df['city'] >= 1) & (df['state'] >= 1) & (df['zip'] >= 1) &
+                 (df['country'] >= 1) & (df['address'] >= 1))
 
-    score1 = df['score'] >= 5.9
-    score2 = df['score'] >= 3.4
+    masks.append((df['name'] == 1) | (df['company_name'] == 1) | (df['email'] == 1))
 
-    masks.append(score1)
-    masks.append(score2 & ((name | company) & (email | phone)))
-    masks.append(score2 & city & state & zip_ & country & address)
-
-    print(f"score mask: {len(df.loc[masks[0]])} | unique: {len(df.loc[masks[0] & ~ (masks[1] | masks[2])])}")
-    print(f"contact mask: {len(df.loc[masks[1]])} | unique: {len(df.loc[masks[1] & ~ (masks[0] | masks[2])])}")
-    print(f"address mask: {len(df.loc[masks[2]])} | unique: {len(df.loc[masks[2] & ~ (masks[1] | masks[0])])}")
+    print(
+        f"\nscore mask: {len(df.loc[masks[0]])} | unique: {len(df.loc[masks[0] & ~ (masks[1] | masks[2] | masks[3])])}")
+    print(
+        f"contact mask: {len(df.loc[masks[1]])} | unique: {len(df.loc[masks[1] & ~ (masks[0] | masks[2] | masks[3])])}")
+    print(
+        f"address mask: {len(df.loc[masks[2]])} | unique: {len(df.loc[masks[2] & ~ (masks[1] | masks[0] | masks[3])])}")
+    print(f"exact mask: {len(df.loc[masks[3]])} | unique: {len(df.loc[masks[3] & ~ (masks[1] | masks[0] | masks[2])])}")
 
     mask = masks[0]
     for m in masks:
@@ -346,6 +372,30 @@ def match(df):
 
 
 matches = match(scores)
-print(f'generated matches: {len(matches)}')
+print(f'generated matches: {len(matches)}\n')
 
-verified, verified_false, non_verified = evaluate_matches(matches)
+verified, verified_false, non_verified = evaluate_matches(matches, plot=False)
+
+groups_all = group_matches(matches)
+groups_true = group_matches(verified)
+groups_false = group_matches(verified_false)
+groups_non_verified = group_matches(non_verified)
+
+grouped_matches_all = show_matches(hw, lda, groups_all)
+grouped_matches_true = show_matches(hw, lda, groups_true)
+grouped_matches_false = show_matches(hw, lda, groups_false)
+grouped_matches_non_verified = show_matches(hw, lda, groups_non_verified)
+
+new_columns = ['source', 'id', 'hw id', 'name', 'name2', 'company_name', 'email', 'phone', 'phone3', 'phone2', 'fax',
+               'web_site', 'group', 'address', 'zip', 'city', 'state', 'country', 'address2', 'city2',
+               'zip2', 'state2', 'country2', 'address3', 'address4']
+
+grouped_matches_all = grouped_matches_all[new_columns]
+grouped_matches_true = grouped_matches_true[new_columns]
+grouped_matches_false = grouped_matches_false[new_columns]
+grouped_matches_non_verified = grouped_matches_non_verified[new_columns]
+
+grouped_matches_all = grouped_matches_all.replace(np.nan, '')
+grouped_matches_true = grouped_matches_true.replace(np.nan, '')
+grouped_matches_false = grouped_matches_false.replace(np.nan, '')
+grouped_matches_non_verified = grouped_matches_non_verified.replace(np.nan, '')

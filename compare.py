@@ -27,11 +27,11 @@ lda = lda.loc[:]
 hw_to_lda = {
     'email': ['email'],
     'company_name': ['name'],
-    'name1': ['name'],
+    'name': ['name'],
     'name2': ['name'],
     'group': ['group'],
     'phone': ['phone', 'fax'],
-    'address1': ['address'],
+    'address': ['address'],
     'address2': ['address'],
     'city': ['city'],
     'state': ['state'],
@@ -48,8 +48,8 @@ hw_to_lda = {
 }
 
 property_merge = {
-    'name': ['name1', 'name2'],
-    'address': ['address1', 'address2', 'address3', 'address4'],
+    'name': ['name', 'name2'],
+    'address': ['address', 'address2', 'address3', 'address4'],
     'city': ['city', 'city2'],
     'state': ['state', 'state2'],
     'zip': ['zip', 'zip2'],
