@@ -82,23 +82,16 @@ hw.columns = ['id', 'email', 'company_name', 'last_name', 'first_name', 'name2',
               'address', 'address2', 'city', 'state', 'zip', 'country', 'phone2', 'saddress1',
               'saddress2', 'city2', 'state2', 'zip2', 'country2', 'phone3']
 
-"""
-LandsDownUnder
-
-number > id
-phone no. > phone
-fax no. > phone
-e-mail > email
-group description > group
-street address > address1
-address (line 2) > address2
-address (line 3) > address3
-zip code > zip
-hw account > hw id
-"""
 lda.columns = ['id', 'name', 'phone', 'fax', 'email', 'group', 'address1', 'address2', 'address3', 'city',
                'state', 'zip', 'country', 'web_site', 'hw id']
 print('renamed columns')
+
+
+for index, row in lda.iterrows():
+    try:
+        int(row['id'])
+    except ValueError:
+        lda.drop(index, inplace=True)
 
 hw['state'] = hw['state'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)  # fix state names
 hw['state2'] = hw['state2'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)  # fix state names
@@ -111,9 +104,6 @@ hw['country2'] = hw['country2'].apply(lambda x: 'usa' if pd.notnull(x) and x.low
 hw['country2'] = hw['country2'].apply(lambda x: fix_country(x) if pd.notnull(x) else x)  # fix country names
 lda['country'] = lda['country'].apply(lambda x: fix_country(x) if pd.notnull(x) else x)  # fix country names
 print('unified countries')
-
-lda_des = lda.describe()
-hw_des = hw.describe()
 
 
 def normalize_name(a: str):
@@ -230,6 +220,8 @@ for col, i in product(list(hw.columns), hw.index):
 hw = merge_columns(hw, 'first_name', 'last_name')
 hw.rename({'first_name': 'name', 'saddress1': 'address3', 'saddress2': 'address4'}, axis=1, inplace=True)
 
+hw_raw = merge_columns(hw_raw, 'first_name', 'last_name')
+hw_raw.rename({'first_name': 'name', 'saddress1': 'address3', 'saddress2': 'address4'}, axis=1, inplace=True)
 
 # remove duplicate values within a record
 for i in hw.index:
@@ -264,12 +256,24 @@ lda = merge_columns(lda, 'address1', 'address2')
 lda = merge_columns(lda, 'address1', 'address3')
 
 lda = lda.rename({'address1': 'address'}, axis=1)
+
+lda_raw = merge_columns(lda_raw, 'address1', 'address2')
+lda_raw = merge_columns(lda_raw, 'address1', 'address3')
+
+lda_raw = lda_raw.rename({'address1': 'address'}, axis=1)
 print('merged columns')
 
 hw.replace([], np.nan, inplace=True)
 lda.replace([], np.nan, inplace=True)
+hw_raw.replace([], np.nan, inplace=True)
+lda_raw.replace([], np.nan, inplace=True)
 
 hw.to_pickle('data/processed/hw_processed.pkl')
 lda.to_pickle('data/processed/lda_processed.pkl')
 
+hw_raw.to_pickle('data/raw/hw_raw.pkl')
+lda_raw.to_pickle('data/raw/lda_raw.pkl')
+
 print('finished operations')
+
+

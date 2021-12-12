@@ -8,23 +8,32 @@ tqdm.pandas()
 
 hw = pd.read_pickle('data/processed/hw_processed.pkl')
 lda = pd.read_pickle('data/processed/lda_processed.pkl')
-hw_raw = pd.read_csv('data/raw/HeroWeb Accounts.csv', delimiter=';')
-lda_raw = pd.read_csv('data/raw/Priority Customers.csv', delimiter=';')
+hw_raw = pd.read_pickle('data/raw/hw_raw.pkl')
+lda_raw = pd.read_pickle('data/raw/lda_raw.pkl')
 scores = pd.read_pickle('data/generated/scores.pkl')
 
-scores = scores[:]
+
+def to_presentation(df: pd.DataFrame):
+    sorted_columns = ['source', 'id', 'hw id', 'name', 'name2', 'company_name', 'email', 'phone', 'phone3', 'phone2',
+                      'fax', 'web_site', 'group', 'address', 'zip', 'city', 'state', 'country', 'address2', 'city2',
+                      'zip2', 'state2', 'country2', 'address3', 'address4']
+    df = df[sorted_columns]
+    df.replace(np.nan, '', inplace=True)
+    df['source'].replace('lda', 'LandsDownUnder', inplace=True)
+    df['source'].replace('hw', 'HeroWeb', inplace=True)
+    return df
 
 
 def group_matches(matches_):
     print(f'grouping {len(matches_)} matches')
     indexes1 = tuple(matches_['index1'])
     indexes2 = tuple(matches_['index2'])
-    groups = [([indexes1[0]], [indexes2[0]])]
+    groups_ = [([indexes1[0]], [indexes2[0]])]
     for idx1, idx2 in zip(indexes1[1:], indexes2[1:]):
         i = 0
         while True:
             try:
-                group = groups[i]
+                group = groups_[i]
             except IndexError:
                 break
 
@@ -36,14 +45,14 @@ def group_matches(matches_):
             elif idx2 in group[1]:
                 group[0].append(idx1)
             else:
-                if i + 1 == len(groups):
-                    groups.append(([idx1], [idx2]))
+                if i + 1 == len(groups_):
+                    groups_.append(([idx1], [idx2]))
                 i += 1
 
-    return groups
+    return groups_
 
 
-def show_matches(df1: pd.DataFrame, df2: pd.DataFrame, groups_: list[tuple[list[int], list[int]]]):
+def matches_to_df(df1: pd.DataFrame, df2: pd.DataFrame, groups_: list[tuple[list[int], list[int]]]):
     columns = list(set(list(df1.columns) + list(df2.columns))) + ['source']
     res = {}
     for c in columns:
@@ -68,6 +77,37 @@ def show_matches(df1: pd.DataFrame, df2: pd.DataFrame, groups_: list[tuple[list[
             res[col].append('')
 
     return pd.DataFrame(data=res)
+
+
+def separate_groups(df1, df2, groups_):
+    verified_ = []
+    not_verified_ = []
+
+    for group in groups_:
+        sorted_ = False
+        ids1 = [df1.loc[i, 'id'] for i in group[0]]
+        ids2 = [df2.loc[i, 'id'] for i in group[1]]
+        ids3 = [df2.loc[i, 'hw id'] for i in group[1]]
+
+        ids3 = list(filter(lambda a: pd.notnull(a), ids3))
+
+        if len(ids2) > len(ids3):
+            not_verified_.append(group)
+            continue
+
+        idx = 0
+        while not sorted_:
+            if idx == len(ids1):
+                verified_.append(group)
+                break
+
+            if ids1[idx] not in ids3:
+                not_verified_.append(group)
+                sorted_ = True
+            idx += 1
+
+    print(f'separated {len(groups_)} to {len(verified_)} verified and {len(not_verified_)} not verified')
+    return verified_, not_verified_
 
 
 def evaluate_matches(df, plot=True):
@@ -278,7 +318,7 @@ def score(row):
     return res
 
 
-def calc_scores(df, column_name='score', func=None, vectorize: bool = True, save: bool = False):
+def calc_combined_scores(df, column_name='score', func=None, vectorize: bool = True, save: bool = False):
     print('started finale score calculation')
     if vectorize:
         df[column_name] = (df['email'] * multipliers['email'] * (df['email'] >= thresholds['email'])) + \
@@ -305,6 +345,7 @@ def calc_scores(df, column_name='score', func=None, vectorize: bool = True, save
     return df
 
 
+# make sure all datatypes are correct
 hw = validate_strings(hw)
 lda = validate_strings(lda)
 hw_raw = validate_strings(hw_raw)
@@ -333,7 +374,7 @@ multipliers = {'email': 1,
                'name': 1,
                'address': 1,
                }
-scores = calc_scores(scores, func=score, vectorize=True, save=False)  # finale score through score formula
+scores = calc_combined_scores(scores, func=score, vectorize=True, save=False)  # finale score through score formula
 
 
 # description = scores.describe()
@@ -356,13 +397,14 @@ def match(df):
 
     masks.append((df['name'] == 1) | (df['company_name'] == 1) | (df['email'] == 1))
 
-    print(
-        f"\nscore mask: {len(df.loc[masks[0]])} | unique: {len(df.loc[masks[0] & ~ (masks[1] | masks[2] | masks[3])])}")
-    print(
-        f"contact mask: {len(df.loc[masks[1]])} | unique: {len(df.loc[masks[1] & ~ (masks[0] | masks[2] | masks[3])])}")
-    print(
-        f"address mask: {len(df.loc[masks[2]])} | unique: {len(df.loc[masks[2] & ~ (masks[1] | masks[0] | masks[3])])}")
-    print(f"exact mask: {len(df.loc[masks[3]])} | unique: {len(df.loc[masks[3] & ~ (masks[1] | masks[0] | masks[2])])}")
+    print(f"\nscore mask: {len(df.loc[masks[0]])} | "
+          f"unique: {len(df.loc[masks[0] & ~ (masks[1] | masks[2] | masks[3])])}",
+          f"\ncontact mask: {len(df.loc[masks[1]])} | "
+          f"unique: {len(df.loc[masks[1] & ~ (masks[0] | masks[2] | masks[3])])}",
+          f"\naddress mask: {len(df.loc[masks[2]])} | "
+          f"unique: {len(df.loc[masks[2] & ~ (masks[1] | masks[0] | masks[3])])}",
+          f"\nexact mask: {len(df.loc[masks[3]])} | "
+          f"unique: {len(df.loc[masks[3] & ~ (masks[1] | masks[0] | masks[2])])}")
 
     mask = masks[0]
     for m in masks:
@@ -371,31 +413,37 @@ def match(df):
     return df.loc[mask]
 
 
-matches = match(scores)
+matches = match(scores)  # choose what is considered as a match
 print(f'generated matches: {len(matches)}\n')
 
-verified, verified_false, non_verified = evaluate_matches(matches, plot=False)
+# verified, verified_false, non_verified = evaluate_matches(matches, plot=False)
 
-groups_all = group_matches(matches)
-groups_true = group_matches(verified)
-groups_false = group_matches(verified_false)
-groups_non_verified = group_matches(non_verified)
+groups = group_matches(matches)  # create groups from all matches
 
-grouped_matches_all = show_matches(hw, lda, groups_all)
-grouped_matches_true = show_matches(hw, lda, groups_true)
-grouped_matches_false = show_matches(hw, lda, groups_false)
-grouped_matches_non_verified = show_matches(hw, lda, groups_non_verified)
+# separate all groups to need or not need verification
+verified, not_verified = separate_groups(hw, lda, groups)
 
-new_columns = ['source', 'id', 'hw id', 'name', 'name2', 'company_name', 'email', 'phone', 'phone3', 'phone2', 'fax',
-               'web_site', 'group', 'address', 'zip', 'city', 'state', 'country', 'address2', 'city2',
-               'zip2', 'state2', 'country2', 'address3', 'address4']
 
-grouped_matches_all = grouped_matches_all[new_columns]
-grouped_matches_true = grouped_matches_true[new_columns]
-grouped_matches_false = grouped_matches_false[new_columns]
-grouped_matches_non_verified = grouped_matches_non_verified[new_columns]
+# convert groups list to  dataframe
+grouped_matches_all = matches_to_df(hw, lda, groups)
+grouped_matches_verified = matches_to_df(hw, lda, verified)
+grouped_matches_not_verified = matches_to_df(hw, lda, not_verified)
+grouped_matches_all_raw = matches_to_df(hw_raw, lda_raw, groups)
+grouped_matches_verified_raw = matches_to_df(hw_raw, lda_raw, verified)
+grouped_matches_not_verified_raw = matches_to_df(hw_raw, lda_raw, not_verified)
 
-grouped_matches_all = grouped_matches_all.replace(np.nan, '')
-grouped_matches_true = grouped_matches_true.replace(np.nan, '')
-grouped_matches_false = grouped_matches_false.replace(np.nan, '')
-grouped_matches_non_verified = grouped_matches_non_verified.replace(np.nan, '')
+# prepare dataframes to presentation
+grouped_matches_all = to_presentation(grouped_matches_all)
+grouped_matches_verified = to_presentation(grouped_matches_verified)
+grouped_matches_not_verified = to_presentation(grouped_matches_not_verified)
+grouped_matches_all_raw = to_presentation(grouped_matches_all_raw)
+grouped_matches_verified_raw = to_presentation(grouped_matches_verified_raw)
+grouped_matches_not_verified_raw = to_presentation(grouped_matches_not_verified_raw)
+
+
+with pd.ExcelWriter('data/generated/matches.xlsx') as writer:  # save to excel
+    grouped_matches_all_raw.to_excel(writer, sheet_name='all')
+    grouped_matches_verified_raw.to_excel(writer, sheet_name='verified')
+    grouped_matches_not_verified_raw.to_excel(writer, sheet_name='not verified')
+
+print('saved results')

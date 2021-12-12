@@ -4,7 +4,6 @@ import textdistance as td
 from time import time
 import multiprocessing as mp
 import numpy as np
-from datetime import timedelta, datetime
 from tqdm import tqdm
 
 hw = pd.read_pickle('data/processed/hw_processed.pkl')
