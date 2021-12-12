@@ -103,8 +103,6 @@ def compare_records(rec1, rec2, idx1, idx2):
 
 def worker(df1, df2, links, res_dict, n_proc):
     print(f'started process num {n_proc} with length {len(links)}')
-    s_time = time()
-    last_percent = 0.0
 
     indexer1 = dict(zip(list(df1.columns), list(range(df1.shape[1]))))
     indexer2 = dict(zip(list(df2.columns), list(range(df2.shape[1]))))
@@ -116,9 +114,9 @@ def worker(df1, df2, links, res_dict, n_proc):
 
     counter = 0
     # if n_proc == 0:
-    # p_bar = tqdm(total=len(links))
+    p_bar = tqdm(total=len(links))
 
-    for pair in tqdm(links):
+    for pair in links:
 
         temp = compare_records(df1.values[pair[0]], df2.values[pair[1]], indexer1, indexer2)
         temp['index1'] = pair[0]
@@ -128,6 +126,8 @@ def worker(df1, df2, links, res_dict, n_proc):
             res_scores[key].append(value)
 
         counter += 1
+        if n_proc == 0:
+            p_bar.update()
 
     res_df = pd.DataFrame(data=res_scores)
     res_df['total'] = res_df.drop(columns=['index1', 'index2']).sum(axis=1)
@@ -158,5 +158,5 @@ if __name__ == "__main__":
 
     frames = [return_dict[i] for i in range(proc_num)]
     scores = pd.concat(frames, ignore_index=True)
-    scores.to_pickle('data/generated/scores.pkl')
+    scores.to_pickle('data/generated/scores_ldu_hw.pkl')
     print('finished all operations')

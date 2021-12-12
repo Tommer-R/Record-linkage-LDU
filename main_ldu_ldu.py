@@ -6,177 +6,61 @@ from matplotlib.ticker import AutoMinorLocator
 
 tqdm.pandas()
 
-hw = pd.read_pickle('data/processed/hw_processed.pkl')
 lda = pd.read_pickle('data/processed/lda_processed.pkl')
-hw_raw = pd.read_pickle('data/raw/hw_raw.pkl')
 lda_raw = pd.read_pickle('data/raw/lda_raw.pkl')
-scores = pd.read_pickle('data/generated/scores.pkl')
+scores = pd.read_pickle('data/generated/scores_ldu_ldu.pkl')
 
-
-def to_presentation(df: pd.DataFrame):
-    sorted_columns = ['source', 'id', 'hw id', 'name', 'name2', 'company_name', 'email', 'phone', 'phone3', 'phone2',
-                      'fax', 'web_site', 'group', 'address', 'zip', 'city', 'state', 'country', 'address2', 'city2',
-                      'zip2', 'state2', 'country2', 'address3', 'address4']
-    df = df[sorted_columns]
-    df.replace(np.nan, '', inplace=True)
-    df['source'].replace('lda', 'LandsDownUnder', inplace=True)
-    df['source'].replace('hw', 'HeroWeb', inplace=True)
-    return df
+lda.drop(columns=['hw id'], inplace=True)
+lda_raw.drop(columns=['hw id'], inplace=True)
 
 
 def group_matches(matches_):
     print(f'grouping {len(matches_)} matches')
     indexes1 = tuple(matches_['index1'])
     indexes2 = tuple(matches_['index2'])
-    groups_ = [([indexes1[0]], [indexes2[0]])]
+    groups_ = [[indexes1[0], indexes2[0]]]
     for idx1, idx2 in zip(indexes1[1:], indexes2[1:]):
+
         i = 0
         while True:
+
             try:
                 group = groups_[i]
             except IndexError:
                 break
 
             # print(groups)
-            if idx1 in group[0] and idx2 in group[1]:
+            if idx1 in group and idx2 in group:
                 i += 1
-            elif idx1 in group[0]:
-                group[1].append(idx2)
-            elif idx2 in group[1]:
-                group[0].append(idx1)
+            elif idx1 in group:
+                group.append(idx2)
+            elif idx2 in group:
+                group.append(idx1)
             else:
                 if i + 1 == len(groups_):
-                    groups_.append(([idx1], [idx2]))
+                    groups_.append([idx1, idx2])
                 i += 1
-
+    print(f'created {len(groups_)} groups')
     return groups_
 
 
-def matches_to_df(df1: pd.DataFrame, df2: pd.DataFrame, groups_: list[tuple[list[int], list[int]]]):
-    columns = list(set(list(df1.columns) + list(df2.columns))) + ['source']
+def matches_to_df(df: pd.DataFrame, groups_: list[list[int]]):
+    columns = list(df.columns)
     res = {}
     for c in columns:
         res[c] = []
 
     for group in groups_:
-        for idx in group[0]:
-            row = df1.loc[idx]
+        for idx in group:
+            row = df.loc[idx]
             for col, val in zip(tuple(row.index), tuple(row.values)):
                 res[col].append(val)
             for col in [item for item in columns if item not in list(row.index)]:
                 res[col].append('')
-            res['source'][-1] = 'hw'
-        for idx in group[1]:
-            row = df2.loc[idx]
-            for col, val in zip(tuple(row.index), tuple(row.values)):
-                res[col].append(val)
-            for col in [item for item in columns if item not in list(row.index)]:
-                res[col].append('')
-            res['source'][-1] = 'lda'
         for col in res.keys():
             res[col].append('')
 
     return pd.DataFrame(data=res)
-
-
-def separate_groups(df1, df2, groups_):
-    verified_ = []
-    not_verified_ = []
-
-    for group in groups_:
-        sorted_ = False
-        ids1 = [df1.loc[i, 'id'] for i in group[0]]
-        ids2 = [df2.loc[i, 'id'] for i in group[1]]
-        ids3 = [df2.loc[i, 'hw id'] for i in group[1]]
-
-        ids3 = list(filter(lambda a: pd.notnull(a), ids3))
-
-        if len(ids2) > len(ids3):
-            not_verified_.append(group)
-            continue
-
-        idx = 0
-        while not sorted_:
-            if idx == len(ids1):
-                verified_.append(group)
-                break
-
-            if ids1[idx] not in ids3:
-                not_verified_.append(group)
-                sorted_ = True
-            idx += 1
-
-    print(f'separated {len(groups_)} to {len(verified_)} verified and {len(not_verified_)} not verified')
-    return verified_, not_verified_
-
-
-def evaluate_matches(df, plot=True):
-    print('evaluating matches')
-    verified_ = []
-    verified_false_ = []
-    non_verified_ = []
-    for i in tqdm(df.index):
-        match_ = df.loc[i]
-        hw_index = match_['index1']
-        lda_index = match_['index2']
-        if pd.notnull(lda_raw.loc[lda_index, 'HW Account']):
-            if lda_raw.loc[lda_index, 'HW Account'] == hw_raw.loc[hw_index, 'account_id']:
-                verified_.append(i)
-            else:
-                verified_false_.append(i)
-        else:
-            non_verified_.append(i)
-
-    num_true_matches = len(lda_raw.loc[pd.notnull(lda_raw['HW Account'])])
-    percent_verified = round(len(verified_) / len(df) * 100, 2)
-    percent_false = round(len(verified_false_) / len(df) * 100, 2)
-    percent_non_verified = 100 - percent_false - percent_verified
-
-    print('\n====================== REPORT ======================')
-    print(f'total matches: {len(df)}')
-    print(f'total true matches: {num_true_matches}')
-    print(f'verified matches: {len(verified_)}')
-    print(f'verified false matches: {len(verified_false_)}')
-    print(f'non verified matches: {len(non_verified_)}')
-    print(f'of total true matches found: {round(len(verified_) / num_true_matches * 100, 2)}%')
-    print(f'verified share: {percent_verified}%')
-    print(f'false share: {percent_false}%')
-    print('====================================================\n')
-
-    if plot:
-        face_color = '#EAEAEA'
-
-        # Pie chart, where the slices will be ordered and plotted counter-clockwise:
-        labels = 'True', 'non-verified', 'False'
-        sizes = [percent_verified, percent_non_verified, percent_false]
-        explode = (0, 0, 0)  # only "explode" one slice
-
-        fig1, ax1 = plt.subplots(1, figsize=(10, 6), facecolor=face_color)
-        ax1.set_facecolor(face_color)
-        ax1.pie(sizes, explode=explode, labels=labels, autopct='%1.2f%%',
-                shadow=False, startangle=90)
-        ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-
-        text_str = '\n'.join((
-            f'total matches: {len(df)}',
-            f'total true matches: {num_true_matches}',
-            f'verified matches: {len(verified_)}',
-            f'verified false matches: {len(verified_false_)}',
-            f'non verified matches: {len(non_verified_)}'))
-
-        # these are matplotlib.patch.Patch properties
-        props = dict(boxstyle='round', facecolor=face_color, alpha=0.5)
-
-        # place a text box in upper left in axes coordinates
-        ax1.text(0.05, 1, text_str, transform=ax1.transAxes, fontsize=14,
-                 verticalalignment='top', horizontalalignment='center', bbox=props)
-
-        plt.title('Matches evaluation')
-        plt.savefig(f'plots/Evaluation.png', facecolor=face_color)
-        plt.show()
-        plt.clf()
-
-    return df.loc[verified_], df.loc[verified_false_], df.loc[non_verified_]
 
 
 def validate_strings(df):
@@ -305,9 +189,9 @@ def plot_combined(df, min_=3):
         axs[i].set_ylabel('Score', c=txt_color2, fontsize=14)
         plt.tight_layout()
 
-    plt.savefig(f'plots/combined_plot.png', facecolor=face_color)
+    plt.savefig(f'plots/combined_plot_ldu_ldu.png', facecolor=face_color)
     plt.clf()
-    print(f'saved plot: "combined_plot.png"')
+    print(f'saved plot: "combined_plot_ldu_ldu.png"')
 
 
 def score(row):
@@ -322,8 +206,6 @@ def calc_combined_scores(df, column_name='score', func=None, vectorize: bool = T
     print('started finale score calculation')
     if vectorize:
         df[column_name] = (df['email'] * multipliers['email'] * (df['email'] >= thresholds['email'])) + \
-                          (df['company_name'] * multipliers['company_name'] * (
-                                  df['company_name'] >= thresholds['company_name'])) + \
                           (df['group'] * multipliers['group'] * (df['group'] >= thresholds['group'])) + \
                           (df['phone'] * multipliers['phone'] * (df['phone'] >= thresholds['phone'])) + \
                           (df['city'] * multipliers['city'] * (df['city'] >= thresholds['city'])) + \
@@ -346,9 +228,7 @@ def calc_combined_scores(df, column_name='score', func=None, vectorize: bool = T
 
 
 # make sure all datatypes are correct
-hw = validate_strings(hw)
 lda = validate_strings(lda)
-hw_raw = validate_strings(hw_raw)
 lda_raw = validate_strings(lda_raw)
 
 thresholds = {'email': 0.5,
@@ -387,15 +267,15 @@ scores = calc_combined_scores(scores, func=score, vectorize=True, save=False)  #
 def match(df):
     masks = []
 
-    masks.append(df['score'] >= 5.9)
+    masks.append(df['score'] >= 4.9)
 
-    masks.append((df['score'] >= 3.4) & (((df['name'] >= 0.8) | (df['company_name'] >= 0.9)) &
-                                         ((df['email'] >= 0.9) | (df['phone'] >= 0.9))))
+    masks.append((df['score'] >= 3.4) & ((df['name'] >= 0.7) &
+                                         ((df['email'] >= 0.8) | (df['phone'] >= 0.9) | (df['fax'] >= 0.8))))
 
-    masks.append((df['score'] >= 3.4) & (df['city'] >= 1) & (df['state'] >= 1) & (df['zip'] >= 1) &
-                 (df['country'] >= 1) & (df['address'] >= 1))
+    masks.append((df['score'] >= 3.4) & (df['city'] >= 0.9) & (df['state'] >= 0.9) & (df['zip'] >= 0.9) &
+                 (df['country'] >= 0.9) & (df['address'] >= 1))
 
-    masks.append((df['name'] == 1) | (df['company_name'] == 1) | (df['email'] == 1))
+    masks.append((df['name'] == 1) | (df['email'] == 1))
 
     print(f"\nscore mask: {len(df.loc[masks[0]])} | "
           f"unique: {len(df.loc[masks[0] & ~ (masks[1] | masks[2] | masks[3])])}",
@@ -414,36 +294,22 @@ def match(df):
 
 
 matches = match(scores)  # choose what is considered as a match
-print(f'generated matches: {len(matches)}\n')
+print(f'generated matches: {len(matches)}')
 
 # verified, verified_false, non_verified = evaluate_matches(matches, plot=False)
 
 groups = group_matches(matches)  # create groups from all matches
 
-# separate all groups to need or not need verification
-verified, not_verified = separate_groups(hw, lda, groups)
-
-
 # convert groups list to  dataframe
-grouped_matches_all = matches_to_df(hw, lda, groups)
-grouped_matches_verified = matches_to_df(hw, lda, verified)
-grouped_matches_not_verified = matches_to_df(hw, lda, not_verified)
-grouped_matches_all_raw = matches_to_df(hw_raw, lda_raw, groups)
-grouped_matches_verified_raw = matches_to_df(hw_raw, lda_raw, verified)
-grouped_matches_not_verified_raw = matches_to_df(hw_raw, lda_raw, not_verified)
+grouped_matches = matches_to_df(lda, groups)
+grouped_matches_raw = matches_to_df(lda_raw, groups)
 
 # prepare dataframes to presentation
-grouped_matches_all = to_presentation(grouped_matches_all)
-grouped_matches_verified = to_presentation(grouped_matches_verified)
-grouped_matches_not_verified = to_presentation(grouped_matches_not_verified)
-grouped_matches_all_raw = to_presentation(grouped_matches_all_raw)
-grouped_matches_verified_raw = to_presentation(grouped_matches_verified_raw)
-grouped_matches_not_verified_raw = to_presentation(grouped_matches_not_verified_raw)
+grouped_matches.replace(np.nan, '', inplace=True)
+grouped_matches_raw.replace(np.nan, '', inplace=True)
 
 
-with pd.ExcelWriter('data/generated/matches.xlsx') as writer:  # save to excel
-    grouped_matches_all_raw.to_excel(writer, sheet_name='all')
-    grouped_matches_verified_raw.to_excel(writer, sheet_name='verified')
-    grouped_matches_not_verified_raw.to_excel(writer, sheet_name='not verified')
+with pd.ExcelWriter('data/generated/matches_ldu_ldu.xlsx') as writer:  # save to excel
+    grouped_matches_raw.to_excel(writer, sheet_name='all')
 
 print('saved results')
