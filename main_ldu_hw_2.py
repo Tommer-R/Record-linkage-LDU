@@ -8,9 +8,9 @@ tqdm.pandas()
 
 # load relevant datasets
 hw = pd.read_pickle('data/processed/hw_processed.pkl')
-ldu = pd.read_pickle('data/processed/lda_processed.pkl')
+lda = pd.read_pickle('data/processed/lda_processed.pkl')
 hw_raw = pd.read_pickle('data/raw/hw_raw.pkl')
-ldu_raw = pd.read_pickle('data/raw/lda_raw.pkl')
+lda_raw = pd.read_pickle('data/raw/lda_raw.pkl')
 scores = pd.read_pickle('data/generated/scores_ldu_hw.pkl')
 
 
@@ -173,15 +173,15 @@ def evaluate_matches(df, plot=False):
         match_ = df.loc[i]
         hw_index = match_['index1']
         lda_index = match_['index2']
-        if pd.notnull(ldu_raw.loc[lda_index, 'HW Account']):
-            if ldu_raw.loc[lda_index, 'HW Account'] == hw_raw.loc[hw_index, 'account_id']:
+        if pd.notnull(lda_raw.loc[lda_index, 'HW Account']):
+            if lda_raw.loc[lda_index, 'HW Account'] == hw_raw.loc[hw_index, 'account_id']:
                 verified_.append(i)
             else:
                 verified_false_.append(i)
         else:
             non_verified_.append(i)
 
-    num_true_matches = len(ldu_raw.loc[pd.notnull(ldu_raw['HW Account'])])
+    num_true_matches = len(lda_raw.loc[pd.notnull(lda_raw['HW Account'])])
     percent_verified = round(len(verified_) / len(df) * 100, 2)
     percent_false = round(len(verified_false_) / len(df) * 100, 2)
     percent_non_verified = 100 - percent_false - percent_verified
@@ -353,9 +353,9 @@ def calc_combined_scores(df: pd.DataFrame, column_name='score', save: bool = Fal
 
 # make sure all datatypes are correct
 hw = validate_strings(hw)
-ldu = validate_strings(ldu)
+lda = validate_strings(lda)
 hw_raw = validate_strings(hw_raw)
-ldu_raw = validate_strings(ldu_raw)
+lda_raw = validate_strings(lda_raw)
 
 scores = calc_combined_scores(scores, save=False)  # finale score through score formula
 
@@ -384,7 +384,7 @@ def match(df):
                  (df['country'] >= 1) & (df['address'] >= 1))
 
     # name or email or company_name is a perfect match
-    masks.append((df['name'] == 1) | (df['company_name'] == 1) | (df['email'] == 1))
+    masks.append((df['name'] == 1) | (df['company_name'] == 1) | (df['email'] == 1) | (df['phone'] == 1))
 
     print(f"\nscore mask: {len(df.loc[masks[0]])} | "
           f"unique: {len(df.loc[masks[0] & ~ (masks[1] | masks[2] | masks[3])])}",
@@ -403,31 +403,25 @@ def match(df):
 
 
 matches = match(scores)  # choose what is considered as a match
-phone_matches = scores.loc[scores['phone'] == 1]
 print(f'generated matches: {len(matches)}\n')
 
 # verified, verified_false, non_verified = evaluate_matches(matches, plot=False)
 
 groups = group_matches(matches)  # create groups from all matches
-phone_groups = group_matches(phone_matches)  # create groups from all matches
-
-for group in phone_groups:
-    if len(group[0]) == 1 and len(group[1]) == 1 and group not in groups:
-        groups.append(group)
 
 validate_groups(groups)
 
 
 # separate all groups to need or not need verification
-verified, not_verified = separate_groups(hw, ldu, groups)
+verified, not_verified = separate_groups(hw, lda, groups)
 
 # convert groups list to  dataframe
-grouped_matches_all = groups_to_df(hw, ldu, groups)
-grouped_matches_verified = groups_to_df(hw, ldu, verified)
-grouped_matches_not_verified = groups_to_df(hw, ldu, not_verified)
-grouped_matches_all_raw = groups_to_df(hw_raw, ldu_raw, groups)
-grouped_matches_verified_raw = groups_to_df(hw_raw, ldu_raw, verified)
-grouped_matches_not_verified_raw = groups_to_df(hw_raw, ldu_raw, not_verified)
+grouped_matches_all = groups_to_df(hw, lda, groups)
+grouped_matches_verified = groups_to_df(hw, lda, verified)
+grouped_matches_not_verified = groups_to_df(hw, lda, not_verified)
+grouped_matches_all_raw = groups_to_df(hw_raw, lda_raw, groups)
+grouped_matches_verified_raw = groups_to_df(hw_raw, lda_raw, verified)
+grouped_matches_not_verified_raw = groups_to_df(hw_raw, lda_raw, not_verified)
 
 # prepare dataframes to presentation
 grouped_matches_all = to_presentation(grouped_matches_all)

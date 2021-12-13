@@ -7,7 +7,7 @@ from itertools import product
 import us
 import country_converter as coco
 
-
+# download nltk resources on first run
 # nltk.download('stopwords')
 # nltk.download('punkt')
 
@@ -17,6 +17,7 @@ state_codes = ['ak', 'al', 'ar', 'az', 'ca', 'co', 'ct', 'dc', 'de', 'fl', 'ga',
                'ky', 'la', 'ma', 'md', 'me', 'mi', 'mn', 'mo', 'ms', 'mt', 'nc', 'nd', 'ne', 'nh', 'nj', 'nm', 'nv',
                'ny', 'oh', 'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn', 'tx', 'ut', 'va', 'vt', 'wa', 'wi', 'wv', 'wy']
 
+# make sure state codes are not removed
 for s in state_codes:
     try:
         all_stopwords.remove(s)
@@ -24,26 +25,8 @@ for s in state_codes:
         pass
 
 
-address_stopwords = all_stopwords + ["street", "st", "place", "rd", "road", 'square']
+address_stopwords = all_stopwords + ["street", "st", "place", "rd", "road", 'square', 'ave']
 name_stopwords = all_stopwords + ['co', 'corp', 'inc', 'company', 'limited', 'llc']
-
-lda = pd.read_csv('data/raw/Priority Customers.csv', delimiter=';')
-hw = pd.read_csv('data/raw/HeroWeb Accounts.csv', delimiter=';')
-print('imported data')
-# lda = lda[:500]
-# hw = hw[:500]
-
-lda.columns = [c.lower() for c in list(lda.columns)]  # change to lower case
-hw.columns = [c.lower() for c in list(hw.columns)]  # change to lower case
-hw.columns = [c.replace('account_', '') for c in list(hw.columns)]  # simplify x names
-hw_columns_to_drop = ['active', 'date_joined', 'date_expires', 'referred_by', 'locked', 'terms', 'sales_rep',
-                      'is_sales_rep', 'tax_id', 'tax_exempt', 'long', 'lat', 'date_last_ordered', 'total_orders',
-                      'total_revenue', 'notes', 'store_optin']
-lda_columns_to_drop = ['city & state', 'state code']
-
-hw.drop(columns=hw_columns_to_drop, inplace=True)
-lda.drop(columns=lda_columns_to_drop, inplace=True)
-print('dropped columns')
 
 
 def fix_state(x: str):
@@ -62,54 +45,12 @@ def fix_country(x: str):
         return x
 
 
-# rename columns to match
-"""
-HeroWeb
-
-email_address > email
-name > name2
-telephone > phone
-stelephone >
-saddress1 > 
-saddress2 > 
-scity > 
-sstate > 
-szip > 
-scountry > 
-telephone2 > phone2
-"""
-hw.columns = ['id', 'email', 'company_name', 'last_name', 'first_name', 'name2', 'group', 'phone',
-              'address', 'address2', 'city', 'state', 'zip', 'country', 'phone2', 'saddress1',
-              'saddress2', 'city2', 'state2', 'zip2', 'country2', 'phone3']
-
-lda.columns = ['id', 'name', 'phone', 'fax', 'email', 'group', 'address1', 'address2', 'address3', 'city',
-               'state', 'zip', 'country', 'web_site', 'hw id']
-print('renamed columns')
-
-
-for index, row in lda.iterrows():
-    try:
-        int(row['id'])
-    except ValueError:
-        lda.drop(index, inplace=True)
-
-hw['state'] = hw['state'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)  # fix state names
-hw['state2'] = hw['state2'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)  # fix state names
-lda['state'] = lda['state'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)  # fix state names
-print('unified states')
-
-hw['country'] = hw['country'].apply(lambda x: 'usa' if pd.notnull(x) and x.lower() == 'un' else x)  # fix country names
-hw['country'] = hw['country'].apply(lambda x: fix_country(x) if pd.notnull(x) else x)  # fix country names
-hw['country2'] = hw['country2'].apply(lambda x: 'usa' if pd.notnull(x) and x.lower() == 'un' else x)  # fix country names
-hw['country2'] = hw['country2'].apply(lambda x: fix_country(x) if pd.notnull(x) else x)  # fix country names
-lda['country'] = lda['country'].apply(lambda x: fix_country(x) if pd.notnull(x) else x)  # fix country names
-print('unified countries')
-
-
 def normalize_name(a: str):
     a = a.lower()  # convert to lower case
     a = re.sub(r'[^a-z0-9 ]', '', a)  # keep numbers and letters and space
     tokens = word_tokenize(a)  # separate words
+    tokens = [word for word in tokens if word not in name_stopwords]  # remove stopwords
+    tokens.sort()
     res = ' '.join(tokens)
     return res
 
@@ -119,6 +60,7 @@ def normalize_address(a: str):
     a = re.sub(r'[^a-z0-9 ]', '', a)  # keep numbers and letters and space
     tokens = word_tokenize(a)  # separate words
     tokens = [word for word in tokens if word not in address_stopwords]  # remove stopwords
+    tokens.sort()
     res = ' '.join(tokens)
     return res
 
@@ -143,24 +85,24 @@ def remove_www(a):
     return a
 
 
-def merge_columns(df, col1, col2, drop=True):
+def merge_columns(df, col1, col2, drop):
     temp_df = pd.DataFrame(index=list(df.index), columns=[col1])
-    for i in df.index:
-        if type(df.loc[i, col1]) == list and type(df.loc[i, col2]) == list:
-            df.loc[i, col1].extend(df.loc[i, col2])
-            temp_df.loc[i, col1] = df.loc[i, col1]
-        elif type(df.loc[i, col1]) == str and type(df.loc[i, col2]) == str:
-            temp_df.loc[i, col1] = df.loc[i, col1] + ' ' + df.loc[i, col2]
-        elif type(df.loc[i, col1]) == str and type(df.loc[i, col2]) == list:
-            df.loc[i, col2].append(df.loc[i, col1])
-            temp_df.loc[i, col1] = df.loc[i, col2]
-        elif type(df.loc[i, col1]) == list and type(df.loc[i, col2]) == str:
-            df.loc[i, col1].append(df.loc[i, col2])
-            temp_df.loc[i, col1] = df.loc[i, col1]
-        elif type(df.loc[i, col1]) == float and not pd.notnull(df.loc[i, col1]) and type(df.loc[i, col2]) == list:
-            temp_df.loc[i, col1] = df.loc[i, col2]
+    for idx in df.index:
+        if type(df.loc[idx, col1]) == list and type(df.loc[idx, col2]) == list:
+            df.loc[idx, col1].extend(df.loc[idx, col2])
+            temp_df.loc[idx, col1] = df.loc[idx, col1]
+        elif type(df.loc[idx, col1]) == str and type(df.loc[idx, col2]) == str:
+            temp_df.loc[idx, col1] = df.loc[idx, col1] + ' ' + df.loc[idx, col2]
+        elif type(df.loc[idx, col1]) == str and type(df.loc[idx, col2]) == list:
+            df.loc[idx, col2].append(df.loc[idx, col1])
+            temp_df.loc[idx, col1] = df.loc[idx, col2]
+        elif type(df.loc[idx, col1]) == list and type(df.loc[idx, col2]) == str:
+            df.loc[idx, col1].append(df.loc[idx, col2])
+            temp_df.loc[idx, col1] = df.loc[idx, col1]
+        elif type(df.loc[idx, col1]) == float and not pd.notnull(df.loc[idx, col1]) and type(df.loc[idx, col2]) == list:
+            temp_df.loc[idx, col1] = df.loc[idx, col2]
         else:
-            temp_df.loc[i, col1] = df.loc[i, col1]
+            temp_df.loc[idx, col1] = df.loc[idx, col1]
 
     df[col1] = temp_df[col1]
 
@@ -169,26 +111,76 @@ def merge_columns(df, col1, col2, drop=True):
     return df
 
 
-lda_raw = lda.copy()
+ldu = pd.read_csv('data/raw/Priority Customers.csv', delimiter=';')
+hw = pd.read_csv('data/raw/HeroWeb Accounts.csv', delimiter=';')
+print('imported data')
+
+
+ldu.columns = [c.lower() for c in list(ldu.columns)]  # change to lower case
+hw.columns = [c.lower() for c in list(hw.columns)]  # change to lower case
+hw.columns = [c.replace('account_', '') for c in list(hw.columns)]  # simplify x names
+hw_columns_to_drop = ['active', 'date_joined', 'date_expires', 'referred_by', 'locked', 'terms', 'sales_rep',
+                      'is_sales_rep', 'tax_id', 'tax_exempt', 'long', 'lat', 'date_last_ordered', 'total_orders',
+                      'total_revenue', 'notes', 'store_optin']
+lda_columns_to_drop = ['city & state', 'state code']
+
+hw.drop(columns=hw_columns_to_drop, inplace=True)
+ldu.drop(columns=lda_columns_to_drop, inplace=True)
+print('dropped and refactored columns')
+
+
+# rename columns to match each other
+hw.columns = ['id', 'email', 'company_name', 'last_name', 'first_name', 'name2', 'group', 'phone','address', 'address2',
+              'city', 'state', 'zip', 'country', 'phone2', 'saddress1', 'saddress2', 'city2', 'state2', 'zip2',
+              'country2', 'phone3']
+
+ldu.columns = ['id', 'name', 'phone', 'fax', 'email', 'group', 'address1', 'address2', 'address3', 'city', 'state',
+               'zip', 'country', 'web_site', 'hw id']
+print('renamed columns')
+
+# drop irrelevant rows
+for index, row in ldu.iterrows():
+    try:
+        int(row['id'])
+    except ValueError:
+        ldu.drop(index, inplace=True)
+print('dropped irrelevant rows')
+
+# fix state names
+hw['state'] = hw['state'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)
+hw['state2'] = hw['state2'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)
+ldu['state'] = ldu['state'].apply(lambda x: fix_state(x) if pd.notnull(x) else x)
+print('unified states format')
+
+# fix country names
+hw['country'] = hw['country'].apply(lambda x: 'usa' if pd.notnull(x) and x.lower() == 'un' else x)
+hw['country'] = hw['country'].apply(lambda x: fix_country(x) if pd.notnull(x) else x)
+hw['country2'] = hw['country2'].apply(lambda x: 'usa' if pd.notnull(x) and x.lower() == 'un' else x)
+hw['country2'] = hw['country2'].apply(lambda x: fix_country(x) if pd.notnull(x) else x)
+ldu['country'] = ldu['country'].apply(lambda x: fix_country(x) if pd.notnull(x) else x)
+print('unified countries format')
+
+# separate to raw and processed datasets
+lda_raw = ldu.copy()
 hw_raw = hw.copy()
 
-# normalize lda
-lda['name'] = lda['name'].apply(lambda x: normalize_name(x) if pd.notnull(x) else x)
-lda['phone'] = lda['phone'].apply(lambda x: normalize_number(x) if pd.notnull(x) else x)
-lda['fax'] = lda['fax'].apply(lambda x: normalize_number(x) if pd.notnull(x) else x)
-lda['email'] = lda['email'].apply(lambda x: normalize_email(x) if pd.notnull(x) else x)
-lda['group'] = lda['group'].apply(lambda x: normalize_name(x) if pd.notnull(x) else x)
-lda['address1'] = lda['address1'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
-lda['address2'] = lda['address2'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
-lda['address3'] = lda['address3'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
-lda['city'] = lda['city'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
-lda['state'] = lda['state'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
-lda['zip'] = lda['zip'].apply(lambda x: normalize_number(x) if pd.notnull(x) else x)
-lda['country'] = lda['country'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
-lda['web_site'] = lda['web_site'].apply(lambda x: normalize_email(x) if pd.notnull(x) else x)
-lda['web_site'] = lda['web_site'].apply(lambda x: remove_www(x) if x != np.nan else x)  # remove 'www'
+# normalize ldu values using the fitting functions
+ldu['name'] = ldu['name'].apply(lambda x: normalize_name(x) if pd.notnull(x) else x)
+ldu['phone'] = ldu['phone'].apply(lambda x: normalize_number(x) if pd.notnull(x) else x)
+ldu['fax'] = ldu['fax'].apply(lambda x: normalize_number(x) if pd.notnull(x) else x)
+ldu['email'] = ldu['email'].apply(lambda x: normalize_email(x) if pd.notnull(x) else x)
+ldu['group'] = ldu['group'].apply(lambda x: normalize_name(x) if pd.notnull(x) else x)
+ldu['address1'] = ldu['address1'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
+ldu['address2'] = ldu['address2'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
+ldu['address3'] = ldu['address3'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
+ldu['city'] = ldu['city'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
+ldu['state'] = ldu['state'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
+ldu['zip'] = ldu['zip'].apply(lambda x: normalize_number(x) if pd.notnull(x) else x)
+ldu['country'] = ldu['country'].apply(lambda x: normalize_address(x) if pd.notnull(x) else x)
+ldu['web_site'] = ldu['web_site'].apply(lambda x: normalize_email(x) if pd.notnull(x) else x)
+ldu['web_site'] = ldu['web_site'].apply(lambda x: remove_www(x) if x != np.nan else x)  # remove 'www'
 
-# normalize hw
+# normalize hw values using the fitting functions
 hw['email'] = hw['email'].apply(lambda x: normalize_email(x) if pd.notnull(x) else x)
 hw['company_name'] = hw['company_name'].apply(lambda x: normalize_name(x) if pd.notnull(x) else x)
 hw['last_name'] = hw['last_name'].apply(lambda x: normalize_name(x) if pd.notnull(x) else x)
@@ -217,10 +209,14 @@ for col, i in product(list(hw.columns), hw.index):
     if type(hw[col][i]) == float and pd.notnull(hw[col][i]):
         hw.loc[i, col] = str(hw.loc[i, col])
 
-hw = merge_columns(hw, 'first_name', 'last_name')
+# merge names columns and rename the column
+hw = merge_columns(hw, 'first_name', 'last_name', drop=True)
 hw.rename({'first_name': 'name', 'saddress1': 'address3', 'saddress2': 'address4'}, axis=1, inplace=True)
+hw['name'] = hw['name'].apply(lambda x: normalize_name(x) if pd.notnull(x) else x)
 
-hw_raw = merge_columns(hw_raw, 'first_name', 'last_name')
+
+# merge names columns and rename the column
+hw_raw = merge_columns(hw_raw, 'first_name', 'last_name', drop=True)
 hw_raw.rename({'first_name': 'name', 'saddress1': 'address3', 'saddress2': 'address4'}, axis=1, inplace=True)
 
 # remove duplicate values within a record
@@ -252,28 +248,22 @@ for i in hw.index:
             not pd.notnull(hw.loc[i, 'address2']):
         hw.loc[i, 'phone2'] = np.nan
 
-lda = merge_columns(lda, 'address1', 'address2')
-lda = merge_columns(lda, 'address1', 'address3')
+ldu = merge_columns(ldu, 'address1', 'address2', drop=True)
+ldu = merge_columns(ldu, 'address1', 'address3', drop=True)
 
-lda = lda.rename({'address1': 'address'}, axis=1)
+ldu = ldu.rename({'address1': 'address'}, axis=1)
 
-lda_raw = merge_columns(lda_raw, 'address1', 'address2')
-lda_raw = merge_columns(lda_raw, 'address1', 'address3')
+lda_raw = merge_columns(lda_raw, 'address1', 'address2', drop=True)
+lda_raw = merge_columns(lda_raw, 'address1', 'address3', drop=True)
 
 lda_raw = lda_raw.rename({'address1': 'address'}, axis=1)
 print('merged columns')
 
-hw.replace([], np.nan, inplace=True)
-lda.replace([], np.nan, inplace=True)
-hw_raw.replace([], np.nan, inplace=True)
-lda_raw.replace([], np.nan, inplace=True)
-
+# save results
 hw.to_pickle('data/processed/hw_processed.pkl')
-lda.to_pickle('data/processed/lda_processed.pkl')
+ldu.to_pickle('data/processed/lda_processed.pkl')
 
 hw_raw.to_pickle('data/raw/hw_raw.pkl')
-lda_raw.to_pickle('data/raw/lda_raw.pkl')
+lda_raw.to_pickle('data/raw/ldu_raw.pkl')
 
 print('finished operations')
-
-
