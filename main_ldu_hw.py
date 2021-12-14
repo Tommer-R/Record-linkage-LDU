@@ -7,8 +7,8 @@ from matplotlib.ticker import AutoMinorLocator
 tqdm.pandas()
 
 # load relevant datasets
-hw = pd.read_pickle('data/processed/hw_processed.pkl')
-ldu = pd.read_pickle('data/processed/lda_processed.pkl')
+hw = pd.read_pickle('data/generated/hw_processed.pkl')
+ldu = pd.read_pickle('data/generated/lda_processed.pkl')
 hw_raw = pd.read_pickle('data/raw/hw_raw.pkl')
 ldu_raw = pd.read_pickle('data/raw/lda_raw.pkl')
 scores = pd.read_pickle('data/generated/scores_ldu_hw.pkl')
