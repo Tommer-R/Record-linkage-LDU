@@ -30,9 +30,11 @@ def group_matches(matches_: pd.DataFrame):
     indexes1 = tuple(matches_['index1'])  # list of indexes from first dataframe
     indexes2 = tuple(matches_['index2'])  # list of matching indexes from second dataframe
     groups_ = [([indexes1[0]], [indexes2[0]])]  # first group
+    links_ = [(indexes1[0], indexes2[0])]
     assert len(indexes1) == len(indexes2)
 
     for idx1, idx2 in zip(indexes1[1:], indexes2[1:]):  # iterate through matching indexes
+        links_.append((idx1, idx2))
         i = 0  # group index
         while True:
             try:
@@ -56,16 +58,18 @@ def group_matches(matches_: pd.DataFrame):
                 i += 1  # next group
 
     print(f'created {len(groups_)} groups')
-    return groups_
+    return groups_, links_
 
 
-def validate_groups(groups_):
+def validate_groups(groups_: list, print_dupes: bool):
     ids1 = []
     ids2 = []
     dupes1 = []
     dupes2 = []
+    lengths = []
 
     for g in groups_:
+        lengths.append(len(g[0]) + len(g[1]))
         for a in g[0]:
             if a in ids1:
                 dupes1.append(a)
@@ -80,37 +84,62 @@ def validate_groups(groups_):
     if len(dupes1) == 0 and len(dupes2) == 0:
         print('validated groups, no duplicates')
     else:
-        print(dupes1)
-        print(dupes2)
+        if print_dupes:
+            print(f'HW dupes: {dupes1}')
+            print(f'LDU dupes: {dupes2}')
         print(f'duplications found inside groups: hw-{len(dupes1)}, ldu-{len(dupes2)}')
+        print(f'max length group: {np.max(lengths)}')
+
+    lengths_df = pd.Series(lengths)
+    return lengths_df.describe()
 
 
-def groups_to_df(df1: pd.DataFrame, df2: pd.DataFrame, groups_: list[tuple[list[int], list[int]]]):
+def groups_to_df(df1: pd.DataFrame, df2: pd.DataFrame, groups_: list[tuple[list[int], list[int]]], links_):
     """
     convert list of groups to a dataframe, in the dataframe each row is an original record and all sequential rows
     are the same group, the same client. between groups are rows of empty strings
     this is meant for easy manual examination and not for further processing
     """
     columns = list(set(list(df1.columns) + list(df2.columns))) + ['source']  # result df columns
-    res = {}  # use dict for better performance
+    res = {'match': []}  # use dict for better performance
     for c in columns:  # init dict structure
         res[c] = []
 
     for group in groups_:
         for idx in group[0]:  # add matches from first dataframe
             row = df1.loc[idx]  # row to add to res dict
+            matching_indexes = set()
+            for n in links_:  # add matches ids
+                if idx == n[0]:
+                    matching_indexes.add(df2['id'][n[1]])  # add id
             for col, val in zip(tuple(row.index), tuple(row.values)):
                 res[col].append(val)  # add value to dict
             for col in [item for item in columns if item not in list(row.index)]:
                 res[col].append('')  # fill missing values with empty strings
             res['source'][-1] = 'hw'  # add name of source df
+            if len(matching_indexes) == 1:
+                res['match'].append(str(list(matching_indexes)[0]))
+            elif len(matching_indexes) >= 1:
+                res['match'].append(', '.join([str(elem) for elem in list(matching_indexes)]))  # show all matches
+            else:
+                res['match'].append('')  # empty string
         for idx in group[1]:  # add matches from second dataframe
             row = df2.loc[idx]  # row to add to res dict
+            matching_indexes = set()
+            for n in links_:  # add matches ids
+                if idx == n[1]:
+                    matching_indexes.add(df1['id'][n[0]])  # add id
             for col, val in zip(tuple(row.index), tuple(row.values)):
                 res[col].append(val)  # add value to dict
             for col in [item for item in columns if item not in list(row.index)]:
                 res[col].append('')  # fill missing values with empty strings
             res['source'][-1] = 'ldu'  # add name of source df
+            if len(matching_indexes) == 1:
+                res['match'].append(str(list(matching_indexes)[0]))
+            elif len(matching_indexes) >= 1:
+                res['match'].append(', '.join([str(elem) for elem in list(matching_indexes)]))  # show all matches
+            else:
+                res['match'].append('')  # empty string
         for col in res.keys():  # add row of empty string after group
             res[col].append('')
 
@@ -118,11 +147,13 @@ def groups_to_df(df1: pd.DataFrame, df2: pd.DataFrame, groups_: list[tuple[list[
 
 
 # prepare dataframe for easier examination
-def to_presentation(df: pd.DataFrame):
-    sorted_columns = ['source', 'id', 'hw id', 'name', 'name2', 'company_name', 'email', 'phone', 'phone3', 'phone2',
+def to_presentation(df: pd.DataFrame, drop_hw_id: bool):
+    sorted_columns = ['source', 'id', 'hw id', 'match', 'name', 'name2', 'company_name', 'email', 'phone', 'phone3', 'phone2',
                       'fax', 'web_site', 'group', 'address', 'zip', 'city', 'state', 'country', 'address2', 'city2',
                       'zip2', 'state2', 'country2', 'address3', 'address4']
     df = df[sorted_columns]  # reorder columns
+    if drop_hw_id:
+        df = df.drop(columns=['hw id'])
     df.replace(np.nan, '', inplace=True)  # replace all missing values with empty string
     df['source'].replace('ldu', 'LandsDownUnder', inplace=True)  # use the full name instead of short
     df['source'].replace('hw', 'HeroWeb', inplace=True)  # use the full name instead of short
@@ -373,27 +404,29 @@ def match(df):
     """
     masks = []
 
-    masks.append(df['score'] >= 5.9)  # combined score
-
     # combined score is not too small and, name  or company_name matches and, email or phone matches
-    masks.append((df['score'] >= 3.4) & (((df['name'] >= 0.8) | (df['company_name'] >= 0.9)) &
-                                         ((df['email'] >= 0.9) | (df['phone'] >= 0.9))))
+    masks.append((((df['name'] >= 0.8) | (df['company_name'] >= 0.9)) &
+                  ((df['email'] >= 0.9) | (df['phone'] >= 0.9))))
 
     # combined score is not small and, all location attributes match
-    masks.append((df['score'] >= 3.4) & (df['city'] >= 0.9) & (df['state'] >= 0.9) & (df['zip'] >= 1) &
+    masks.append((df['city'] >= 0.9) & (df['state'] >= 0.9) & (df['zip'] >= 1) &
                  (df['country'] >= 1) & (df['address'] >= 1))
+
+    # combined score is not small and, some location attributes and the phone match
+    masks.append((df['city'] >= 0.8) & (df['state'] >= 0.8) & (df['zip'] >= 0.8) &
+                 (df['country'] >= 0.9) & (df['phone'] >= 1))
 
     # name or email or company_name is a perfect match
     masks.append((df['name'] == 1) | (df['company_name'] == 1) | (df['email'] == 1))
 
-    print(f"\nscore mask: {len(df.loc[masks[0]])} | "
+    print(f"\ncontact mask: {len(df.loc[masks[0]])} | "
           f"unique: {len(df.loc[masks[0] & ~ (masks[1] | masks[2] | masks[3])])}",
-          f"\ncontact mask: {len(df.loc[masks[1]])} | "
+          f"\naddress mask: {len(df.loc[masks[1]])} | "
           f"unique: {len(df.loc[masks[1] & ~ (masks[0] | masks[2] | masks[3])])}",
-          f"\naddress mask: {len(df.loc[masks[2]])} | "
+          f"\nphone mask: {len(df.loc[masks[2]])} | "
           f"unique: {len(df.loc[masks[2] & ~ (masks[1] | masks[0] | masks[3])])}",
           f"\nexact mask: {len(df.loc[masks[3]])} | "
-          f"unique: {len(df.loc[masks[3] & ~ (masks[1] | masks[0] | masks[2])])}")
+          f"unique: {len(df.loc[masks[3] & ~ (masks[0] | masks[1] | masks[2])])}")
 
     mask = masks[0]
     for m in masks:  # combine all matches
@@ -403,39 +436,33 @@ def match(df):
 
 
 matches = match(scores)  # choose what is considered as a match
-phone_matches = scores.loc[scores['phone'] == 1]
+phone_matches = scores.loc[(scores['phone'] == 1) & scores['country'] == 1]
 print(f'generated matches: {len(matches)}\n')
 
 # verified, verified_false, non_verified = evaluate_matches(matches, plot=False)
 
-groups = group_matches(matches)  # create groups from all matches
-phone_groups = group_matches(phone_matches)  # create groups from all matches
+groups, links = group_matches(matches)  # create groups from all matches
 
-for group in phone_groups:
-    if len(group[0]) == 1 and len(group[1]) == 1 and group not in groups:
-        groups.append(group)
-
-validate_groups(groups)
-
+length_description = validate_groups(groups, print_dupes=False)
 
 # separate all groups to need or not need verification
 verified, not_verified = separate_groups(hw, ldu, groups)
 
 # convert groups list to  dataframe
-grouped_matches_all = groups_to_df(hw, ldu, groups)
-grouped_matches_verified = groups_to_df(hw, ldu, verified)
-grouped_matches_not_verified = groups_to_df(hw, ldu, not_verified)
-grouped_matches_all_raw = groups_to_df(hw_raw, ldu_raw, groups)
-grouped_matches_verified_raw = groups_to_df(hw_raw, ldu_raw, verified)
-grouped_matches_not_verified_raw = groups_to_df(hw_raw, ldu_raw, not_verified)
+grouped_matches_all = groups_to_df(hw, ldu, groups, links)
+grouped_matches_verified = groups_to_df(hw, ldu, verified, links)
+grouped_matches_not_verified = groups_to_df(hw, ldu, not_verified, links)
+grouped_matches_all_raw = groups_to_df(hw_raw, ldu_raw, groups, links)
+grouped_matches_verified_raw = groups_to_df(hw_raw, ldu_raw, verified, links)
+grouped_matches_not_verified_raw = groups_to_df(hw_raw, ldu_raw, not_verified, links)
 
 # prepare dataframes to presentation
-grouped_matches_all = to_presentation(grouped_matches_all)
-grouped_matches_verified = to_presentation(grouped_matches_verified)
-grouped_matches_not_verified = to_presentation(grouped_matches_not_verified)
-grouped_matches_all_raw = to_presentation(grouped_matches_all_raw)
-grouped_matches_verified_raw = to_presentation(grouped_matches_verified_raw)
-grouped_matches_not_verified_raw = to_presentation(grouped_matches_not_verified_raw)
+grouped_matches_all = to_presentation(grouped_matches_all, drop_hw_id=True)
+grouped_matches_verified = to_presentation(grouped_matches_verified, drop_hw_id=True)
+grouped_matches_not_verified = to_presentation(grouped_matches_not_verified, drop_hw_id=True)
+grouped_matches_all_raw = to_presentation(grouped_matches_all_raw, drop_hw_id=True)
+grouped_matches_verified_raw = to_presentation(grouped_matches_verified_raw, drop_hw_id=True)
+grouped_matches_not_verified_raw = to_presentation(grouped_matches_not_verified_raw, drop_hw_id=True)
 
 if __name__ == '__main__':
     with pd.ExcelWriter('data/generated/matches_ldu_hw.xlsx') as writer:  # save to excel

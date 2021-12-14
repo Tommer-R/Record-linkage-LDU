@@ -31,9 +31,11 @@ def group_matches(matches_):
     indexes1 = tuple(matches_['index1'])  # list of indexes
     indexes2 = tuple(matches_['index2'])  # list of matching indexes
     groups_ = [[indexes1[0], indexes2[0]]]  # first group
+    links_ = [[indexes1[0], indexes2[0]]]
     assert len(indexes1) == len(indexes2)
 
     for idx1, idx2 in zip(indexes1[1:], indexes2[1:]):  # iterate through matching indexes
+        links_.append([idx1, idx2])
         i = 0  # group index
         while True:
             try:
@@ -57,14 +59,16 @@ def group_matches(matches_):
                 i += 1  # next group
 
     print(f'created {len(groups_)} groups')
-    return groups_
+    return groups_, links_
 
 
-def validate_groups(groups_):
+def validate_groups(groups_: list, print_dupes: bool):
     ids = []
     dupes = []
+    lengths = []
 
     for g in groups_:
+        lengths.append(len(g))
         for a in g:
             if a in ids:
                 dupes.append(a)
@@ -74,26 +78,44 @@ def validate_groups(groups_):
     if len(dupes) == 0:
         print('validated groups, no duplicates')
     else:
-        print(dupes)
+        if print_dupes:
+            print(f'dupes: {dupes}')
         print(f'duplications found inside groups: {len(dupes)}')
+        print(f'max length group: {np.max(lengths)}')
+    lengths_df = pd.Series(lengths)
+    return lengths_df.describe()
 
 
-def groups_to_df(df: pd.DataFrame, groups_: list[list[int]]):
+def groups_to_df(df: pd.DataFrame, groups_: list[list[int]], links_):
     """
     convert list of groups to a dataframe, in the dataframe each row is an original record and all sequential rows
     are the same group, the same client. between groups are rows of empty strings
     this is meant for easy manual examination and not for further processing
     """
     columns = list(df.columns)  # result df columns
-    res = {}  # use dict for better performance
+    res = {'match': []}  # use dict for better performance
     for c in columns:  # init dict structure
         res[c] = []
 
     for group in groups_:
         for idx in group:
             row = df.loc[idx]  # row to add to res dict
+            matching_indexes = set()
+            for n in links_:  # add matches ids
+                if idx in n:
+                    l2 = n[:]
+                    l2.remove(idx)
+                    matching_indexes.add(df['id'][l2[0]])  # add id
+
             for col, val in zip(tuple(row.index), tuple(row.values)):
                 res[col].append(val)  # add value to dict
+            if len(matching_indexes) == 1:
+                res['match'].append(str(list(matching_indexes)[0]))
+            elif len(matching_indexes) >= 1:
+                res['match'].append(', '.join([str(elem) for elem in list(matching_indexes)]))  # show all matches
+            else:
+                res['match'].append('')  # empty string
+
             for col in [item for item in columns if item not in list(row.index)]:
                 res[col].append('')  # fill missing values with empty strings
         for col in res.keys():  # add row of empty string after group
@@ -224,6 +246,7 @@ lda_raw = validate_strings(lda_raw)
 
 scores = calc_combined_scores(scores, save=False)  # finale score through score formula
 
+
 # scores_description = scores.describe()
 
 # plot_combined(scores)
@@ -271,18 +294,22 @@ print(f'generated matches: {len(matches)}')
 
 # verified, verified_false, non_verified = evaluate_matches(matches, plot=False)
 
-groups = group_matches(matches)  # create groups from all matches
+groups, links = group_matches(matches)  # create groups from all matches
 
-validate_groups(groups)
+length_description = validate_groups(groups, print_dupes=False)
 
 # convert groups list to  dataframe
-grouped_matches = groups_to_df(lda, groups)
-grouped_matches_raw = groups_to_df(lda_raw, groups)
+grouped_matches = groups_to_df(lda, groups, links)
+grouped_matches_raw = groups_to_df(lda_raw, groups, links)
 
 # prepare dataframes to presentation
-grouped_matches.replace(np.nan, '', inplace=True)
-grouped_matches_raw.replace(np.nan, '', inplace=True)
 
+grouped_matches.replace(np.nan, '', inplace=True)
+grouped_matches = grouped_matches[['id', 'match', 'name', 'phone', 'fax', 'email', 'group', 'address',
+                                   'city', 'state', 'zip', 'country', 'web_site']]
+grouped_matches_raw.replace(np.nan, '', inplace=True)
+grouped_matches_raw = grouped_matches_raw[['id', 'match', 'name', 'phone', 'fax', 'email', 'group', 'address',
+                                           'city', 'state', 'zip', 'country', 'web_site']]
 
 with pd.ExcelWriter('data/generated/matches_ldu_ldu.xlsx') as writer:  # save to excel
     grouped_matches_raw.to_excel(writer, sheet_name='all')
