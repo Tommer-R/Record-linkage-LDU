@@ -303,7 +303,6 @@ grouped_matches = groups_to_df(lda, groups, links)
 grouped_matches_raw = groups_to_df(lda_raw, groups, links)
 
 # prepare dataframes to presentation
-
 grouped_matches.replace(np.nan, '', inplace=True)
 grouped_matches = grouped_matches[['id', 'match', 'name', 'phone', 'fax', 'email', 'group', 'address',
                                    'city', 'state', 'zip', 'country', 'web_site']]
