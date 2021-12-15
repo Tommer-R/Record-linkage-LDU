@@ -201,7 +201,7 @@ I ended up using the 3rd method and defined the scenarios as follows:
 
 To get those values I plotted the distribution of each field, and depending on the distribution  chose the threshold.
 for example:
-![](plots/state plot.png)
+![](https://github.com/Tommer-R/LandsDownUnder-record-linkage/blob/main/plots/state%20plot.png)
 As you can see, there is a **large** number of very high scores, so we could use a threshold of 1.0.
 That being said, for address matches we use 5 different fields, so we can afford to use a slightly lower threshold of 0.9
 because that will allow for small changes like typos.
