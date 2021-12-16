@@ -4,7 +4,14 @@ This is a case study of a record linkage or fuzzy duplicates problem.
 **p.s:** for privacy reasons all private data displayed here is fake and not part of the real datasets, 
 although made to appear similar.
 
-## Problem description
+**Table of contents:**
+1. [problem description](#description)
+2. [the datasets](#datasets)
+3. [preprocessing](#preprocessing)
+4. [methodology](#methodology)
+5. [conclusion](#conclusion)
+
+## Problem description <a name="description"></a>
 The online retailer [Lands down under](https://www.landsdownunder.com/) is changing their business management system
 and as part of the migration process they want to clean and combine their inner and 3rd party customer datasets.
 
@@ -18,7 +25,7 @@ The retailer will then manually inspect each group, mark it as correct or incorr
 To save the retailers time and resources, type 1 errors (false positives) have higher significance than type 2 errors
 (false negatives) and should be avoided.
 
-## The datasets
+## The datasets <a name="datasets"></a>
 
 As mentioned above, there are two datasets relevant to the problem:
 
@@ -73,7 +80,7 @@ Those are the columns and their structure:
 21. **Country 2 -** shipping address in same format
 22. **Phone 3 -** third phone related to the customer
 
-## Preprocessing
+## Preprocessing <a name="preprocessing"></a>
 
 First, we must match the datasets to each other as soon as possible, therefore, 
 I dropped all columns from the HW dataset besides the ones mentioned above, that have an equivalent in the LDU dataset.
@@ -124,7 +131,7 @@ for i in hw.index:
         hw.loc[i, 'address2'] = np.nan
 ```
 
-## Methodology
+## Methodology <a name="methodology"></a>
 ### Calculating similarity
 As mentioned above, there are several challenges in this case that prevent usage of the usual methods such as the 
 [RecordLinkage](https://recordlinkage.readthedocs.io/en/latest/about.html) or the [FuzzyWuzzy](https://pypi.org/project/fuzzywuzzy/)
@@ -225,7 +232,7 @@ As a result I found 274 duplicates which were divided into 184 groups.
 The mush smaller number of results is expected since ideally, there shouldn't be any duplicates to begin with but there 
 should be a large number of matches between the two datasets.
 
-## Conclusion
+## Conclusion <a name="conclusion"></a>
 This is a variation of a very common problem many businesses deal with. The method above successfully found the majority 
 of matches and duplicates with a minimal number of false positives.
 
