@@ -5,8 +5,8 @@ import multiprocessing as mp
 import numpy as np
 from tqdm import tqdm
 
-hw = pd.read_pickle('data/processed/hw_processed.pkl')
-lda = pd.read_pickle('data/processed/lda_processed.pkl')
+hw = pd.read_pickle('data/generated/hw_processed.pkl')
+lda = pd.read_pickle('data/generated/lda_processed.pkl')
 
 
 # make sure datatypes are correct

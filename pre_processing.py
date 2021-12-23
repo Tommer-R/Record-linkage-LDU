@@ -122,10 +122,11 @@ hw.columns = [c.replace('account_', '') for c in list(hw.columns)]  # simplify x
 hw_columns_to_drop = ['active', 'date_joined', 'date_expires', 'referred_by', 'locked', 'terms', 'sales_rep',
                       'is_sales_rep', 'tax_id', 'tax_exempt', 'long', 'lat', 'date_last_ordered', 'total_orders',
                       'total_revenue', 'notes', 'store_optin']
-lda_columns_to_drop = ['city & state', 'state code']
-
+ldu_columns_to_drop = ['city & state', 'state code']
+hw = hw[~(hw['active'] == 'N')]  # drop inactive records
 hw.drop(columns=hw_columns_to_drop, inplace=True)
-ldu.drop(columns=lda_columns_to_drop, inplace=True)
+ldu.drop(columns=ldu_columns_to_drop, inplace=True)
+
 print('dropped and refactored columns')
 
 
@@ -144,6 +145,13 @@ for index, row in ldu.iterrows():
         int(row['id'])
     except ValueError:
         ldu.drop(index, inplace=True)
+
+inactive_ldu = ['100014', '100060', '100109', '100110', '100111', '100112', '100113', '100632', '101084', '101085',
+                '101124', '101297', '101451', '101453', '101454', '101951', '102101', '103174', '103325', '103326',
+                '103424', '103767', '104112', '104113', '104315', '104458', '104468', '105075', '105214']
+ldu = ldu[~ldu['id'].isin(inactive_ldu)]  # drop inactive records
+hw.reset_index(inplace=True)
+ldu.reset_index(inplace=True)
 print('dropped irrelevant rows')
 
 # fix state names
@@ -260,8 +268,8 @@ lda_raw = lda_raw.rename({'address1': 'address'}, axis=1)
 print('merged columns')
 
 # save results
-hw.to_pickle('data/processed/hw_processed.pkl')
-ldu.to_pickle('data/processed/lda_processed.pkl')
+hw.to_pickle('data/generated/hw_processed.pkl')
+ldu.to_pickle('data/generated/ldu_processed.pkl')
 
 hw_raw.to_pickle('data/raw/hw_raw.pkl')
 lda_raw.to_pickle('data/raw/ldu_raw.pkl')

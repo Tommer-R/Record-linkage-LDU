@@ -175,7 +175,7 @@ def separate_groups(df1, df2, groups_):
 
         ids3 = list(filter(lambda a: pd.notnull(a), ids3))
 
-        if len(ids2) > len(ids3):
+        if len(ids2) > len(ids3) or len(ids1) + len(ids2) > 2:
             not_verified_.append(group)
             continue
 
